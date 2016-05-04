@@ -159,7 +159,7 @@ def main():
 	try:
 		if args.url is not None:
 			os.remove(TMP_CURL_FILE)
-		else:
+		elif not csv_filename.startswith(CSV_DIR):
 			os.rename(csv_filename, CSV_DIR+"/"+csv_filename)
 	except OSError, e:
 		print('Unable to move {0} to {1}/{2}/{0}'.format(csv_filename,
