@@ -172,6 +172,7 @@ def generate_excel(filename, values_array, verbose=False):
 		ctrl_sum = 0
 		last_dist = 0
 		pbreak_list = []
+		last_was_control = False # for calculations
 
 		# now we get to loop through each row
 		for i in range(len(values_array)):
@@ -182,16 +183,27 @@ def generate_excel(filename, values_array, verbose=False):
 			curr_dist = row['dist']-last_dist
 
 			if ctrl_sum != 0:
-				worksheet.write(row_num, col_num, '=SUM(A{0}+E{0})'.format(row_num), dist_format)
+				worksheet.write(row_num, col_num, '=A{1}+E{0}'.format(row_num, row_num if not last_was_control
+																			   else row_num-1), dist_format)
 			else:
 				worksheet.write(row_num, col_num, '', arial_12)
+				
 			if row['control']:
 				worksheet.write_string(row_num, col_num + 1, '', arial_12_no_border)
 				worksheet.write_string(row_num, col_num + 3, row['descr'].decode('utf-8'), control_format)
 				worksheet.write_number(row_num, col_num + 4,     0, dist_format)
 				height = 20
+
+				# reset the control accumulator
+				# ctrl_sum = 0
+
+				last_was_control = True
+				# make a note of the distance so we can accumulate on the next cue
+				last_dist -= curr_dist
+				# for easier printing configuration
 				pbreak_list.append(row_num)
 			else:
+				last_was_control = False
 				worksheet.write_string(row_num, col_num + 1, row['turn'].decode('utf-8'), arial_12)
 				worksheet.write_string(row_num, col_num + 2, '', arial_12)
 				worksheet.write_string(row_num, col_num + 3, row['descr'].decode('utf-8'), cue_format)
