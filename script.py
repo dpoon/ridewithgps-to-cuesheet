@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 
 import argparse, sys, os
 from subprocess import call
@@ -65,7 +66,7 @@ def create_directories():
 	if not os.path.exists(XLSX_DIR):
 		os.makedirs(XLSX_DIR)
 
-def run_generation(input_csv, output_xlsx, do_printing):
+def run_generation(input_csv, output_xlsx, do_printing, debug):
 	"""Basically do the generation part, calling our ridewithgps.py module functions"""
 
 	print ("Beginning file read...")
@@ -73,7 +74,7 @@ def run_generation(input_csv, output_xlsx, do_printing):
 	values_array = Converter.format_array(values_array, do_printing)
 
 	print ("Beginning file generation...")
-	Converter.generate_excel(output_xlsx, values_array, do_printing)
+	Converter.generate_excel(output_xlsx, values_array, do_printing, debug)
 
 	print ("Generation complete!")
 
@@ -91,6 +92,8 @@ def main():
 	parser.add_argument("-f", "--filename", help="CSV if converting locally",
 						type=csv_file)
 
+	parser.add_argument("--debugging", action="store_true")
+
 	args = parser.parse_args()
 
 	# Okay, we know at least one is required
@@ -107,6 +110,8 @@ def main():
 
 	if args.verbose:
 		print ("Running converter in verbose mode")
+	if args.debugging:
+		print ("DEBUG MODE")
 
 	# set where we output to
 	if args.output is not None:
@@ -114,7 +119,8 @@ def main():
 	elif args.url:
 		excel_filename = '{0}_cues.xlsx'.format(args.url['slug'])
 	else:
-		excel_filename = args.filename.replace('.csv', '_cues.xlsx')
+		excel_filename = args.filename[args.filename.rfind('/')+1:]
+		excel_filename = excel_filename.replace('.csv', '_cues.xlsx')
 
 	print ("We will output to '{0}'".format(excel_filename))
 
@@ -138,15 +144,27 @@ def main():
 			sys.exit (e)
 
 	# do the generation
-	run_generation(csv_filename, excel_filename, args.verbose)
+	run_generation(csv_filename, excel_filename, args.verbose, args.debugging)
 
 	# move the files
-	os.rename(excel_filename, "outputs/"+excel_filename)
-
-	if args.url is not None:
-		os.remove(TMP_CURL_FILE)
-	else:
-		os.rename(csv_filename, "files/"+csv_filename)
+	try:
+		os.rename(excel_filename, XLSX_DIR+"/"+excel_filename)
+	except OSError, e:
+		print('Unable to move {0} to {1}/{2}/{0}'.format(excel_filename,
+														os.getcwd(),
+														XLSX_DIR) )
+		if e.errno is 2:
+			print('likely the output dir is missing')
+	
+	try:
+		if args.url is not None:
+			os.remove(TMP_CURL_FILE)
+		elif not csv_filename.startswith(CSV_DIR):
+			os.rename(csv_filename, CSV_DIR+"/"+csv_filename)
+	except OSError, e:
+		print('Unable to move {0} to {1}/{2}/{0}'.format(csv_filename,
+														os.getcwd(),
+														CSV_DIR) )
 
 	print ("Your cues file is now located at {0}/outputs/{1}".format(os.getcwd(),
 																	excel_filename))

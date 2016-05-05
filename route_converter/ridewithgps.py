@@ -1,8 +1,10 @@
+# -*- coding: utf-8 -*-
+from decimal import Decimal
+
 """
 	This program is designed to convert a RideWithGPS
 	exported csv file, into a BC Randonneurs Routesheet
 """
-# TODO: throw errors in this program, make someone else handle?
 
 def merge(dict1, *dicts):
 	"""Merge two dicts. Used so we can preserve consistent styling"""
@@ -25,42 +27,52 @@ def read_csv_to_array(filename):
 				values.append(cue)
 
 	# TODO: make specific
+	except IOError, ioe:
+		if ioe.errno is 2:
+			print ("Cannot find CSV file")
 	except Exception, e:
 		print ("Error in reading csv file")
+		raise e
 	finally:
 		pass # should be uneeded using 'with'
 	return values
 
 def format_array(array, verbose=False):
 	end_cue_present = False
+	last = -1
 
-	for i in range(len(array)):
-		parsed = _format_cue(array[i], verbose)
+	for i in range(len(array)-1, -1, -1):
+		parsed = _format_cue(array[i], i, last, verbose)
 		array[i] = parsed['dict']
 		end_cue_present = end_cue_present or parsed['end']
+		last = parsed['last']
 
 	return array
 
-def _format_cue(row, verbose=False):
+def _format_cue(row, idx, last_dist, verbose=False):
 	"""
 	Parse the csv values into dictionaries so that they're easier to manipulate
 
 	Return:
 		Dict with 'dict': the dictionary for the row
 				  'end': a boolean telling us if the cnotrol has an end value
+				  'last': the distance of this control for use in interval calculationn
 	"""
 	import re
 
 	has_end = False
 	is_control = (row[0] in ['Food','Start','End','Summit'])
+	this_dist = Decimal(row[2])
+
+	if (idx is 1 and this_dist <= 0.1):
+		this_dist = Decimal('0')
 
 	# the summit cue is what tells us there's an end
 	# (and that we will format the row cue with FINISH)
 	if row[0] == 'Summit':
 		has_end = True
-		row[1] = "FINISH: " + row[1]
+		row[1] = "ARRIVÉE: " + row[1]
 
-	# print (row[2])
 
 	# direction via Rando standards
 	def map_dir(x):
@@ -78,9 +90,9 @@ def _format_cue(row, verbose=False):
 	# more compact cues
 	def map_cue(x):
 		if x == 'Start of route':
-			return 'START'
+			return 'DÉPART'
 		elif x == 'End of route':
-			return 'FINISH CONTROL'
+			return 'ARRIVÉE'
 		elif x.startswith('Continue onto '):
 			return x[len('Continue onto '):]
 		else:
@@ -95,13 +107,14 @@ def _format_cue(row, verbose=False):
 
 	return { 'dict': {	'turn': map_dir(row[0]),
 						'descr': map_cue(row[1]),
-						'dist': float(row[2]),
+						'dist': last_dist,
 						'control': is_control
 						},
-			'end': has_end
+			'end': has_end,
+			'last': this_dist
 		}
 
-def generate_excel(filename, values_array, verbose=False):
+def generate_excel(filename, values_array, verbose=False, debugging=False):
 	"""This is pretty much the meat. We take the array of dicts and spit out the values"""
 	import xlsxwriter
 
@@ -135,7 +148,7 @@ def generate_excel(filename, values_array, verbose=False):
 												{'left_color':'white',
 												 'right_color':'white'}))
 		# Add a number format for cells with distances
-		dist_format = workbook.add_format(merge({'num_format': '0.0'},
+		dist_format = workbook.add_format(merge({'num_format': '0.00'},
 												a_12_opts, all_border))
 		cue_format = workbook.add_format(merge({'text_wrap': True},
 												a_12_opts, all_border))
@@ -160,7 +173,10 @@ def generate_excel(filename, values_array, verbose=False):
 		worksheet.write('A6', 'Dist.(cum.)', title_format)
 		worksheet.write('B6', 'Turn', title_format)
 		worksheet.write('C6', 'Direction', title_format)
-		worksheet.set_column('A:D', 5.6)  # width
+		worksheet.set_column('A:A', 7.5
+									if values_array[ len(values_array)-1 ]['dist'] > 1000 
+									else 6.5)  # width
+		worksheet.set_column('B:D', 5.6)  # width
 		worksheet.write('D6', 'Route Description', descr_format)
 		worksheet.set_column('D:D', 39)  # width
 		worksheet.write('E6', 'Dist.(int.)', title_format)
@@ -169,7 +185,7 @@ def generate_excel(filename, values_array, verbose=False):
 		# Start from the first cell below the headers.
 		row_num = 6
 		col_num = 0
-		ctrl_sum = 0
+		ctrl_sum = 0 # TODO: investigate use for island cue sheet
 		last_dist = 0
 		pbreak_list = []
 		last_was_control = False # for calculations
@@ -178,9 +194,19 @@ def generate_excel(filename, values_array, verbose=False):
 		for i in range(len(values_array)):
 			row = values_array[i]
 
+			# interval distance
+			curr_dist = row['dist'] - last_dist
+			# for the next loop
+			last_dist = 0
+
 			if verbose:
-				print("We're on row %s at %s" % ((row_num-6), row['dist']))
-			curr_dist = row['dist']-last_dist
+				tmp = "We're on row {0} at {1}kms".format(row_num-6, row['dist']);
+				if 'onto' in row['descr']:
+					tmp = '({0}) '.format(row['descr'][ row['descr'].find('onto')+5 : ]) + tmp
+				else:
+					tmp = row['descr'] + ': ' + tmp
+				print (tmp)
+				print ('\testimated distance is {0}kms since last'.format(curr_dist))
 
 			if ctrl_sum != 0:
 				worksheet.write(row_num, col_num, '=A{1}+E{0}'.format(row_num, row_num if not last_was_control
@@ -191,13 +217,13 @@ def generate_excel(filename, values_array, verbose=False):
 			if row['control']:
 				worksheet.write_string(row_num, col_num + 1, '', arial_12_no_border)
 				worksheet.write_string(row_num, col_num + 3, row['descr'].decode('utf-8'), control_format)
-				worksheet.write_number(row_num, col_num + 4,     0, dist_format)
 				height = 20
 
 				# reset the control accumulator
 				# ctrl_sum = 0
 
 				last_was_control = True
+
 				# make a note of the distance so we can accumulate on the next cue
 				last_dist -= curr_dist
 				# for easier printing configuration
@@ -207,15 +233,17 @@ def generate_excel(filename, values_array, verbose=False):
 				worksheet.write_string(row_num, col_num + 1, row['turn'].decode('utf-8'), arial_12)
 				worksheet.write_string(row_num, col_num + 2, '', arial_12)
 				worksheet.write_string(row_num, col_num + 3, row['descr'].decode('utf-8'), cue_format)
-				worksheet.write_number(row_num, col_num + 4, round(curr_dist, 1), dist_format)
+				worksheet.write_number(row_num, col_num + 4, curr_dist, dist_format)
+
 				height = 15
 				ctrl_sum += curr_dist
 				if (row_num - pbreak_list[-1]) == 42:
 					pbreak_list.append(row_num)
+				
 
 			# set the row_num formatting
 			worksheet.set_row(row_num, height)
-			last_dist = row['dist']
+			last_dist += row['dist']
 			row_num += 1
 
 		# Write last notes
@@ -226,16 +254,13 @@ def generate_excel(filename, values_array, verbose=False):
 		worksheet.write(row_num, col_num + 3, "PHONE: ** ORGANIZER'S NUMBER **", only_center)
 
 		# for printing
-		worksheet.print_area('A1:E%d' % (row_num+1))
+		worksheet.print_area('A1:E{}'.format(row_num+1))
 		# chop off finish and start
 		pbreak_list = pbreak_list[1:-1]
 		worksheet.set_h_pagebreaks(pbreak_list)
 
 		workbook.close()
 
-	# TODO: make specific
-	except Exception, e:
-		raise e
 	finally:
 		if workbook is not None:
 			workbook.close()
