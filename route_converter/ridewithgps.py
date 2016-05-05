@@ -6,6 +6,15 @@ from decimal import Decimal
 	exported csv file, into a BC Randonneurs Routesheet
 """
 
+CONTROL_CUE_INDICATORS = ['Food','Start','End','Summit']
+END_INDICATOR = "Summit"
+START_TEXT = "DÉPART"
+END_TEXT = "ARRIVÉE"
+
+class argsobject(object):
+    def __init__(self, d):
+        self.__dict__ = d
+
 def merge(dict1, *dicts):
 	"""Merge two dicts. Used so we can preserve consistent styling"""
 	dict3 = dict1.copy()
@@ -61,7 +70,7 @@ def _format_cue(row, idx, last_dist, verbose=False):
 	import re
 
 	has_end = False
-	is_control = (row[0] in ['Food','Start','End','Summit'])
+	is_control = (row[0] in CONTROL_CUE_INDICATORS)
 	this_dist = Decimal(row[2])
 
 	if (idx is 1 and this_dist <= 0.1):
@@ -69,9 +78,9 @@ def _format_cue(row, idx, last_dist, verbose=False):
 
 	# the summit cue is what tells us there's an end
 	# (and that we will format the row cue with FINISH)
-	if row[0] == 'Summit':
+	if row[0] == END_INDICATOR:
 		has_end = True
-		row[1] = "ARRIVÉE: " + row[1]
+		row[1] = END_TEXT + ": " + row[1]
 
 
 	# direction via Rando standards
@@ -90,9 +99,9 @@ def _format_cue(row, idx, last_dist, verbose=False):
 	# more compact cues
 	def map_cue(x):
 		if x == 'Start of route':
-			return 'DÉPART'
+			return START_TEXT
 		elif x == 'End of route':
-			return 'ARRIVÉE'
+			return END_TEXT
 		elif x.startswith('Continue onto '):
 			return x[len('Continue onto '):]
 		else:
@@ -114,8 +123,18 @@ def _format_cue(row, idx, last_dist, verbose=False):
 			'last': this_dist
 		}
 
-def generate_excel(filename, values_array, verbose=False, debugging=False):
-	"""This is pretty much the meat. We take the array of dicts and spit out the values"""
+def generate_excel(filename, values_array, opts):
+	"""
+	This is pretty much the meat. We take the array of dicts and spit out the values
+
+	Arguments:
+
+		filename: to write to
+		values_array: as read in above
+		opts.include_from_last: to show distance since the last control
+		opts.hide_direction: hide direction column
+		opts.verbose: periodic printiouts
+	"""
 	import xlsxwriter
 
 	try:
@@ -140,7 +159,7 @@ def generate_excel(filename, values_array, verbose=False, debugging=False):
 													'bg_color': '#C0C0C0',
 													'text_wrap': True
 													},
-												   centered, defaults,
+												   centered, a_12_opts,
 												   all_border))
 		# default font
 		arial_12 = workbook.add_format(merge(a_12_opts, all_border))
@@ -150,42 +169,72 @@ def generate_excel(filename, values_array, verbose=False, debugging=False):
 		# Add a number format for cells with distances
 		dist_format = workbook.add_format(merge({'num_format': '0.00'},
 												a_12_opts, all_border))
+		dist_format2 = workbook.add_format(merge({'num_format': '0.0'},
+												a_12_opts, all_border))
 		cue_format = workbook.add_format(merge({'text_wrap': True},
 												a_12_opts, all_border))
 		red_title = workbook.add_format(merge({'font_color':'red'
 											  }, a_12_opts, centered))
+		black_title = workbook.add_format(merge({'font_color':'black'
+											  }, a_12_opts, centered))
 
 		# Add an Excel date format.
-		# date_format = workbook.add_format({'num_format': 'mmmm d yyyy'})
-
 
 		# Adjust the column width.
 		#     Cell width is (8.43/16.83) * XXmm
 		#     worksheet.set_column(1, 1, 15)
 
-		worksheet.merge_range('A1:E1', 'INSERT NAME OF RIDE', red_title)
-		worksheet.merge_range('A2:E2', 'insert date of ride', red_title)
-		worksheet.merge_range('A3:E3', 'insert name of Ride Organizer', red_title)
-		worksheet.merge_range('A4:E4', 'insert Start location', red_title)
-		worksheet.merge_range('A5:E5', 'insert Finish location', red_title)
+		# helper function to allow us to get the colum letters
+		def letter(num_after):
+			return chr(65 + num_after)
+
+		col_num = 0
+		curr_col = col_num # init
+		num_cols = 4
+		if opts.include_from_last:
+			num_cols += 1
+
+		if opts.hide_direction:
+			num_cols -= 1
+
+		last_col_letter = letter(num_cols)
+
+		worksheet.merge_range('A1:{0}1'.format(last_col_letter), 'INSERT NAME OF RIDE', red_title)
+		worksheet.merge_range('A2:{0}2'.format(last_col_letter), 'insert date of ride', red_title)
+		worksheet.merge_range('A3:{0}3'.format(last_col_letter), 'insert name of Ride Organizer', red_title)
+		worksheet.merge_range('A4:{0}4'.format(last_col_letter), 'insert Start location', red_title)
+		worksheet.merge_range('A5:{0}5'.format(last_col_letter), 'insert Finish location', red_title)
 
 		# Write some data headers.
 		worksheet.write('A6', 'Dist.(cum.)', title_format)
-		worksheet.write('B6', 'Turn', title_format)
-		worksheet.write('C6', 'Direction', title_format)
+		curr_col += 1
+
+		if opts.include_from_last:
+			worksheet.write(letter(curr_col)+'6', 'Dist. Since', title_format)
+			curr_col += 1
+
+		worksheet.write(letter(curr_col)+'6', 'Turn', title_format)
+		curr_col += 1
+
+		if not opts.hide_direction:
+			worksheet.write(letter(curr_col)+'6', 'Direction', title_format)
+			curr_col += 1
+
+		# on long rides, we need wider columns
 		worksheet.set_column('A:A', 7.5
 									if values_array[ len(values_array)-1 ]['dist'] > 1000 
 									else 6.5)  # width
-		worksheet.set_column('B:D', 5.6)  # width
-		worksheet.write('D6', 'Route Description', descr_format)
-		worksheet.set_column('D:D', 39)  # width
-		worksheet.write('E6', 'Dist.(int.)', title_format)
-		worksheet.set_column('E:E', 5.6)  # width
+		worksheet.set_column('B:'+letter(curr_col), 5.6)  # width
+		worksheet.write( letter(curr_col)+'6' , 'Route Description', descr_format)
+		worksheet.set_column( '{0}:{0}'.format(letter(curr_col)) , 39)  # width
+		curr_col += 1
+
+		worksheet.write( letter(curr_col)+'6', 'Dist.(int.)' , title_format)
+		worksheet.set_column( '{0}:{0}'.format(letter(curr_col)) , 5.6)  # width
 
 		# Start from the first cell below the headers.
 		row_num = 6
-		col_num = 0
-		ctrl_sum = 0 # TODO: investigate use for island cue sheet
+		ctrl_sum = 0
 		last_dist = 0
 		pbreak_list = []
 		last_was_control = False # for calculations
@@ -198,8 +247,9 @@ def generate_excel(filename, values_array, verbose=False, debugging=False):
 			curr_dist = row['dist'] - last_dist
 			# for the next loop
 			last_dist = 0
+			curr_col = col_num
 
-			if verbose:
+			if opts.verbose:
 				tmp = "We're on row {0} at {1}kms".format(row_num-6, row['dist']);
 				if 'onto' in row['descr']:
 					tmp = '({0}) '.format(row['descr'][ row['descr'].find('onto')+5 : ]) + tmp
@@ -208,20 +258,37 @@ def generate_excel(filename, values_array, verbose=False, debugging=False):
 				print (tmp)
 				print ('\testimated distance is {0}kms since last'.format(curr_dist))
 
-			if ctrl_sum != 0:
-				worksheet.write(row_num, col_num, '=A{1}+E{0}'.format(row_num, row_num if not last_was_control
-																			   else row_num-1), dist_format)
+			if i is 0:
+				pass
+			elif i is 1:
+				worksheet.write(row_num, curr_col, 0, dist_format)
 			else:
-				worksheet.write(row_num, col_num, '', arial_12)
+				# On those ones after a control, we'll simply repeat the previous sum
+				worksheet.write(row_num, curr_col, '=A{0}+{1}{0}'.format(row_num if not last_was_control
+																		  else row_num-1, last_col_letter),
+													dist_format)
+			curr_col += 1
+
+			# write out the include from last distances in the second column
+			if opts.include_from_last:
+				worksheet.write(row_num, curr_col, ctrl_sum, dist_format2)
+				curr_col += 1
 				
 			if row['control']:
-				worksheet.write_string(row_num, col_num + 1, '', arial_12_no_border)
-				worksheet.write_string(row_num, col_num + 3, row['descr'].decode('utf-8'), control_format)
+				worksheet.write_string(row_num, curr_col, '', arial_12_no_border)
+				curr_col += 1
+
+				if not opts.hide_direction:
+					worksheet.write_string(row_num, curr_col, '', arial_12)
+					curr_col += 1
+
+				worksheet.write_string(row_num, curr_col, row['descr'].decode('utf-8'), control_format)
+				curr_col += 1
+				worksheet.write_string(row_num, curr_col, '', arial_12)
 				height = 20
 
 				# reset the control accumulator
-				# ctrl_sum = 0
-
+				ctrl_sum = 0
 				last_was_control = True
 
 				# make a note of the distance so we can accumulate on the next cue
@@ -230,14 +297,20 @@ def generate_excel(filename, values_array, verbose=False, debugging=False):
 				pbreak_list.append(row_num)
 			else:
 				last_was_control = False
-				worksheet.write_string(row_num, col_num + 1, row['turn'].decode('utf-8'), arial_12)
-				worksheet.write_string(row_num, col_num + 2, '', arial_12)
-				worksheet.write_string(row_num, col_num + 3, row['descr'].decode('utf-8'), cue_format)
-				worksheet.write_number(row_num, col_num + 4, curr_dist, dist_format)
+				worksheet.write_string(row_num, curr_col, row['turn'].decode('utf-8'), arial_12)
+				curr_col += 1
+
+				if not opts.hide_direction:
+					worksheet.write_string(row_num, curr_col, '', arial_12)
+					curr_col += 1
+
+				worksheet.write_string(row_num, curr_col, row['descr'].decode('utf-8'), cue_format)
+				curr_col += 1
+				worksheet.write_number(row_num, curr_col, curr_dist, dist_format)
 
 				height = 15
 				ctrl_sum += curr_dist
-				if (row_num - pbreak_list[-1]) == 42:
+				if (row_num - pbreak_list[-1]) is 42:
 					pbreak_list.append(row_num)
 				
 
@@ -246,15 +319,15 @@ def generate_excel(filename, values_array, verbose=False, debugging=False):
 			last_dist += row['dist']
 			row_num += 1
 
-		# Write last notes
-		worksheet.write(row_num, col_num + 2, '', workbook.add_format({'top':1}))
-		only_center = workbook.add_format(merge(defaults, centered))
-		worksheet.write(row_num, col_num + 3, 'IN CASE OF ABANDONMENT OR EMERGENCY', only_center)
 		row_num += 1
-		worksheet.write(row_num, col_num + 3, "PHONE: ** ORGANIZER'S NUMBER **", only_center)
+		worksheet.merge_range('A{0}:{1}{0}'.format(row_num, last_col_letter), 'IN CASE OF ABANDONMENT OR EMERGENCY', black_title)
+		row_num += 1
+		worksheet.merge_range('A{0}:{1}{0}'.format(row_num, last_col_letter), "PHONE: ** ORGANIZER'S NUMBER **", black_title)
+
+		row_num += 1
 
 		# for printing
-		worksheet.print_area('A1:E{}'.format(row_num+1))
+		worksheet.print_area('A1:{0}{1}'.format(last_col_letter, row_num))
 		# chop off finish and start
 		pbreak_list = pbreak_list[1:-1]
 		worksheet.set_h_pagebreaks(pbreak_list)

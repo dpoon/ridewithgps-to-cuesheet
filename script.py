@@ -5,6 +5,7 @@ from subprocess import call
 
 # our code
 import route_converter.ridewithgps as Converter
+from route_converter.ridewithgps import argsobject
 
 TMP_CURL_FILE='_curl_file.csv'
 CSV_DIR='files'
@@ -66,15 +67,18 @@ def create_directories():
 	if not os.path.exists(XLSX_DIR):
 		os.makedirs(XLSX_DIR)
 
-def run_generation(input_csv, output_xlsx, do_printing, debug):
+def run_generation(input_csv, output_xlsx, cli_args):
 	"""Basically do the generation part, calling our ridewithgps.py module functions"""
 
 	print ("Beginning file read...")
 	values_array = Converter.read_csv_to_array(input_csv)
-	values_array = Converter.format_array(values_array, do_printing)
+	values_array = Converter.format_array(values_array, cli_args.verbose)
 
 	print ("Beginning file generation...")
-	Converter.generate_excel(output_xlsx, values_array, do_printing, debug)
+	Converter.generate_excel(output_xlsx, values_array, 
+		argsobject({ 'include_from_last': cli_args.island,
+					 'hide_direction': cli_args.hidedir,
+					 'verbose': cli_args.verbose }))
 
 	print ("Generation complete!")
 
@@ -82,6 +86,12 @@ def run_generation(input_csv, output_xlsx, do_printing, debug):
 def main():
 	parser = argparse.ArgumentParser(description='Convert a RWGPS Map to a BC Rando style cuesheet')
 	
+	parser.add_argument("-i", "--island", help="In the style of Vancouver Island, show distance from last control",
+						action="store_true")
+
+	parser.add_argument("-d", "--hidedir", help="Hide the direction column",
+						action="store_true")
+
 	parser.add_argument("-v", "--verbose", help="Output all statuses",
 						action="store_true")
 
@@ -112,6 +122,19 @@ def main():
 		print ("Running converter in verbose mode")
 	if args.debugging:
 		print ("DEBUG MODE")
+
+	args_msg = "Cuesheet will:"
+
+	if args.island:
+		args_msg += " include distance from last control"
+
+	if args.hidedir:
+		if not args_msg.endswith(":"):
+			args_msg += ','
+		args_msg += " omit direction column"
+
+	if not args_msg.endswith(":"):
+		print (args_msg)
 
 	# set where we output to
 	if args.output is not None:
@@ -144,7 +167,7 @@ def main():
 			sys.exit (e)
 
 	# do the generation
-	run_generation(csv_filename, excel_filename, args.verbose, args.debugging)
+	run_generation(csv_filename, excel_filename, args)
 
 	# move the files
 	try:
