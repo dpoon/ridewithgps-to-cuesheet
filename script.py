@@ -150,7 +150,7 @@ def main():
 	try:
 		create_directories()
 	# TODO: make specific
-	except Exception, e:
+	except Exception as e:
 		print (e)
 		print ("Unable to output to the proper directories")
 
@@ -162,8 +162,8 @@ def main():
 		try:
 			curl_route(args.url['url'], args.verbose)
 			csv_filename = TMP_CURL_FILE
-		except Exception, e:
-			print "Unable to retrieve url!"
+		except Exception as e:
+			print ("Unable to retrieve url!")
 			sys.exit (e)
 
 	# do the generation
@@ -172,11 +172,11 @@ def main():
 	# move the files
 	try:
 		os.rename(excel_filename, XLSX_DIR+"/"+excel_filename)
-	except OSError, e:
-		print('Unable to move {0} to {1}/{2}/{0}'.format(excel_filename,
+	except OSError as oe:
+		print ('Unable to move {0} to {1}/{2}/{0}'.format(excel_filename,
 														os.getcwd(),
 														XLSX_DIR) )
-		if e.errno is 2:
+		if oe.errno is 2:
 			print('likely the output dir is missing')
 	
 	try:
@@ -184,7 +184,7 @@ def main():
 			os.remove(TMP_CURL_FILE)
 		elif not csv_filename.startswith(CSV_DIR):
 			os.rename(csv_filename, CSV_DIR+"/"+csv_filename)
-	except OSError, e:
+	except OSError as oe:
 		print('Unable to move {0} to {1}/{2}/{0}'.format(csv_filename,
 														os.getcwd(),
 														CSV_DIR) )

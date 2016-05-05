@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+from __future__ import unicode_literals
 from decimal import Decimal
 
 """
@@ -29,17 +30,17 @@ def read_csv_to_array(filename):
 
 	values = []
 	try:
-		with open(filename, 'rb') as csvfile:
+		with open(filename, 'r') as csvfile:
 			cuesheet = csv.reader(csvfile)
 			next(cuesheet)
 			for cue in cuesheet:
 				values.append(cue)
 
 	# TODO: make specific
-	except IOError, ioe:
+	except IOError as ioe:
 		if ioe.errno is 2:
 			print ("Cannot find CSV file")
-	except Exception, e:
+	except Exception as e:
 		print ("Error in reading csv file")
 		raise e
 	finally:
@@ -282,7 +283,7 @@ def generate_excel(filename, values_array, opts):
 					worksheet.write_string(row_num, curr_col, '', arial_12)
 					curr_col += 1
 
-				worksheet.write_string(row_num, curr_col, row['descr'].decode('utf-8'), control_format)
+				worksheet.write_string(row_num, curr_col, row['descr'], control_format)
 				curr_col += 1
 				worksheet.write_string(row_num, curr_col, '', arial_12)
 				height = 20
@@ -297,14 +298,14 @@ def generate_excel(filename, values_array, opts):
 				pbreak_list.append(row_num)
 			else:
 				last_was_control = False
-				worksheet.write_string(row_num, curr_col, row['turn'].decode('utf-8'), arial_12)
+				worksheet.write_string(row_num, curr_col, row['turn'], arial_12)
 				curr_col += 1
 
 				if not opts.hide_direction:
 					worksheet.write_string(row_num, curr_col, '', arial_12)
 					curr_col += 1
 
-				worksheet.write_string(row_num, curr_col, row['descr'].decode('utf-8'), cue_format)
+				worksheet.write_string(row_num, curr_col, row['descr'], cue_format)
 				curr_col += 1
 				worksheet.write_number(row_num, curr_col, curr_dist, dist_format)
 
