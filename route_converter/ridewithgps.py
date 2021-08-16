@@ -1,5 +1,3 @@
-# -*- coding: utf-8 -*-
-from __future__ import unicode_literals
 from decimal import Decimal
 
 """
@@ -7,7 +5,7 @@ from decimal import Decimal
 	exported csv file, into a BC Randonneurs Routesheet
 """
 
-CONTROL_CUE_INDICATORS = ['Food','Start','End','Summit']
+CONTROL_CUE_INDICATORS = ['Food','Control','Start','End','Summit']
 END_INDICATOR = "Summit"
 START_TEXT = "DÉPART"
 END_TEXT = "ARRIVÉE"
@@ -30,7 +28,7 @@ def read_csv_to_array(filename):
 
 	values = []
 	try:
-		with open(filename, 'r') as csvfile:
+		with open(filename, 'r', encoding='utf-8') as csvfile:
 			cuesheet = csv.reader(csvfile)
 			next(cuesheet)
 			for cue in cuesheet:
@@ -38,7 +36,7 @@ def read_csv_to_array(filename):
 
 	# TODO: make specific
 	except IOError as ioe:
-		if ioe.errno is 2:
+		if ioe.errno == 2:
 			print ("Cannot find CSV file")
 	except Exception as e:
 		print ("Error in reading csv file")
@@ -74,7 +72,7 @@ def _format_cue(row, idx, last_dist, verbose=False):
 	is_control = (row[0] in CONTROL_CUE_INDICATORS)
 	this_dist = Decimal(row[2])
 
-	if (idx is 1 and this_dist <= 0.1):
+	if (idx == 1 and this_dist <= 0.1):
 		this_dist = Decimal('0')
 
 	# the summit cue is what tells us there's an end
@@ -92,8 +90,10 @@ def _format_cue(row, idx, last_dist, verbose=False):
 			return 'L'
 		elif x == 'Right':
 			return 'R'
-		elif x == 'Generic' or x == 'Food':
+		elif x == 'Generic' or x == 'Food' or x == 'Control':
 			return ''
+		elif x == 'Uturn':
+			return 'TA'
 		else:
 			return x
 
@@ -113,6 +113,7 @@ def _format_cue(row, idx, last_dist, verbose=False):
 							  x):
 					return x[len('Turn ' + direction + ' to '):]
 			x.replace('becomes', 'b/c')
+			x.replace('slightly ', '')
 			return x
 
 	return { 'dict': {	'turn': map_dir(row[0]),
@@ -148,6 +149,7 @@ def generate_excel(filename, values_array, opts):
 					'font_name': 'Arial'}
 		centered = {'align': 'center',
 					'valign': 'vcenter'}
+		float_top = {'valign':'top'}
 		all_border = {'border':1}
 
 		# for the titles
@@ -169,11 +171,11 @@ def generate_excel(filename, values_array, opts):
 												 'right_color':'white'}))
 		# Add a number format for cells with distances
 		dist_format = workbook.add_format(merge({'num_format': '0.00'},
-												a_12_opts, all_border))
+												float_top, a_12_opts, all_border))
 		dist_format2 = workbook.add_format(merge({'num_format': '0.0'},
-												a_12_opts, all_border))
+												float_top, a_12_opts, all_border))
 		cue_format = workbook.add_format(merge({'text_wrap': True},
-												a_12_opts, all_border))
+												float_top, a_12_opts, all_border))
 		red_title = workbook.add_format(merge({'font_color':'red'
 											  }, a_12_opts, centered))
 		black_title = workbook.add_format(merge({'font_color':'black'
@@ -259,9 +261,9 @@ def generate_excel(filename, values_array, opts):
 				print (tmp)
 				print ('\testimated distance is {0}kms since last'.format(curr_dist))
 
-			if i is 0:
+			if i == 0:
 				pass
-			elif i is 1:
+			elif i == 1:
 				worksheet.write(row_num, curr_col, 0, dist_format)
 			else:
 				# On those ones after a control, we'll simply repeat the previous sum
@@ -295,7 +297,7 @@ def generate_excel(filename, values_array, opts):
 				# make a note of the distance so we can accumulate on the next cue
 				last_dist -= curr_dist
 				# for easier printing configuration
-				pbreak_list.append(row_num)
+				pbreak_list.append(row_num + 1)
 			else:
 				last_was_control = False
 				worksheet.write_string(row_num, curr_col, row['turn'], arial_12)
@@ -311,7 +313,7 @@ def generate_excel(filename, values_array, opts):
 
 				height = 15
 				ctrl_sum += curr_dist
-				if (row_num - pbreak_list[-1]) is 42:
+				if (row_num - pbreak_list[-1]) == 42:
 					pbreak_list.append(row_num)
 				
 
@@ -332,8 +334,6 @@ def generate_excel(filename, values_array, opts):
 		# chop off finish and start
 		pbreak_list = pbreak_list[1:-1]
 		worksheet.set_h_pagebreaks(pbreak_list)
-
-		workbook.close()
 
 	finally:
 		if workbook is not None:

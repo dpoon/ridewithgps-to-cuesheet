@@ -21,7 +21,7 @@ def valid_url(string):
 	"""
 
 	rw_url_prefix = 'https://ridewithgps.com/routes/'
-	if not string.startswith(rw_url_prefix) or string[len(rw_url_prefix):] is "":
+	if not string.startswith(rw_url_prefix) or string[len(rw_url_prefix):] == "":
 		msg = "Not a valid URL from RideWithGPS: '{0}'.".format(string)
 		raise argparse.ArgumentTypeError(msg)
 
@@ -31,7 +31,7 @@ def valid_url(string):
 
 def csv_file(string):
 	if not string.endswith('.csv'):
-		msg = "Not a valid css file: '{0}'.".format(string)
+		msg = "Not a valid csv file: '{0}'.".format(string)
 		raise argparse.ArgumentTypeError(msg)
 
 	return string
@@ -176,7 +176,7 @@ def main():
 		print ('Unable to move {0} to {1}/{2}/{0}'.format(excel_filename,
 														os.getcwd(),
 														XLSX_DIR) )
-		if oe.errno is 2:
+		if oe.errno == 2:
 			print('likely the output dir is missing')
 	
 	try:

@@ -1,0 +1,18 @@
+[[package]]
+name = "xlsxwriter"
+version = "3.0.1"
+description = "A Python module for creating Excel XLSX files."
+category = "main"
+optional = false
+python-versions = ">=3.4"
+
+[metadata]
+lock-version = "1.1"
+python-versions = "^3.9"
+content-hash = "8fb068cdc22dd40e4e5cfb677541c76bd256d712279bfdf2f7057d47ca503a6d"
+
+[metadata.files]
+xlsxwriter = [
+    {file = "XlsxWriter-3.0.1-py3-none-any.whl", hash = "sha256:2f2af944d2b4b5f21cd3ac8e01b2417ec74c60e2ca11cae90b4f32ee172c99d6"},
+    {file = "XlsxWriter-3.0.1.tar.gz", hash = "sha256:3f39bf581c55f3ad1438bc170d7f4c4649cee8b6b7a80d21f79508118eeea52a"},
+]
