@@ -1,198 +1,236 @@
-#!/usr/bin/env python
+import argparse
+import os
+import sys
+from urllib.parse import urlparse
 
-import argparse, sys, os
-from subprocess import call
+import requests
 
-# our code
 import route_converter.ridewithgps as Converter
 from route_converter.ridewithgps import argsobject
 
-TMP_CURL_FILE='_curl_file.csv'
-CSV_DIR='files'
-XLSX_DIR='outputs'
+TMP_CURL_FILE = "_curl_file.csv"
+CSV_DIR = "files"
+XLSX_DIR = "outputs"
+
 
 def output_exists(string):
-	"""Use this to validate the output filename"""
-	return string
+    """Use this to validate the output filename"""
+    return string
+
 
 def valid_url(string):
-	"""
-	Ensure that our string starts with the proper url, and return the last
-	"""
+    """
+    Ensure that our string starts with the proper url, and return the last
+    """
 
-	rw_url_prefix = 'https://ridewithgps.com/routes/'
-	if not string.startswith(rw_url_prefix) or string[len(rw_url_prefix):] == "":
-		msg = "Not a valid URL from RideWithGPS: '{0}'.".format(string)
-		raise argparse.ArgumentTypeError(msg)
+    rw_url_prefix = "https://ridewithgps.com/routes/"
+    if not string.startswith(rw_url_prefix) or string[len(rw_url_prefix) :] == "":
+        msg = f"Not a valid URL from RideWithGPS: '{string}'."
+        msg += "\n"
+        msg += f"Must start with {rw_url_prefix}"
+        raise argparse.ArgumentTypeError(msg)
 
-	return { 'url': string,
-			'slug': string[len(rw_url_prefix):]
-			}
+    parsed = urlparse(string)
+
+    return {"url": string, "parsed": parsed, "id": parsed.path.split("/")[-1]}
+
 
 def csv_file(string):
-	if not string.endswith('.csv'):
-		msg = "Not a valid csv file: '{0}'.".format(string)
-		raise argparse.ArgumentTypeError(msg)
+    if not string.endswith(".csv"):
+        msg = "Not a valid csv file: '{0}'.".format(string)
+        raise argparse.ArgumentTypeError(msg)
 
-	return string
+    return string
+
 
 def curl_route(url, do_printing):
-	"""
-	Handle the good ole' curl, and grab the handle
+    """
+    Handle the good ole' curl, and grab the handle
 
-	Args:
-		url: http string
-		do_printing: for verbosity
+    Args:
+            url: http string
+            do_printing: for verbosity
 
-	Raises:
-		nothing at the moment...
-	"""
-	# TODO: fix me in terms of the latest versions
-	print ("Grabbing '{}' ...".format(url))
+    Raises:
+            nothing at the moment...
+    """
+    # TODO: fix me in terms of the latest versions
+    download_url = url["url"].replace(url["id"], f"{url['id']}.csv")
+    print(f"Grabbing '{download_url}' ...")
 
-	args = ['curl', url+'.csv', "-H Content-Type:text/csv",
-					'-o', TMP_CURL_FILE, 
-					'--silent'] # keep me last
+    response = requests.get(download_url)
+    response.raise_for_status()
 
-	if do_printing:
-		print ("\t" + " ".join(args))
-		# args.pop()
+    with open(TMP_CURL_FILE, "wb") as tmp_file:
+        tmp_file.write(response.content)
 
-	call(args)
 
 def create_directories():
-	"""Because we want a clear output structure"""
-	if not os.path.exists(CSV_DIR):
-		os.makedirs(CSV_DIR)
-	if not os.path.exists(XLSX_DIR):
-		os.makedirs(XLSX_DIR)
+    """Because we want a clear output structure"""
+    if not os.path.exists(CSV_DIR):
+        os.makedirs(CSV_DIR)
+    if not os.path.exists(XLSX_DIR):
+        os.makedirs(XLSX_DIR)
+
 
 def run_generation(input_csv, output_xlsx, cli_args):
-	"""Basically do the generation part, calling our ridewithgps.py module functions"""
+    """Basically do the generation part, calling our ridewithgps.py module functions"""
 
-	print ("Beginning file read...")
-	values_array = Converter.read_csv_to_array(input_csv)
-	values_array = Converter.format_array(values_array, cli_args.verbose)
+    print("Beginning file read...")
+    values_array = Converter.read_csv_to_array(input_csv)
+    values_array = Converter.format_array(values_array, cli_args.verbose)
 
-	print ("Beginning file generation...")
-	Converter.generate_excel(output_xlsx, values_array, 
-		argsobject({ 'include_from_last': cli_args.island,
-					 'hide_direction': cli_args.hidedir,
-					 'verbose': cli_args.verbose }))
+    print("Beginning file generation...")
+    Converter.generate_excel(
+        output_xlsx,
+        values_array,
+        argsobject(
+            {
+                "include_from_last": cli_args.island,
+                "hide_direction": cli_args.hidedir,
+                "verbose": cli_args.verbose,
+            }
+        ),
+    )
 
-	print ("Generation complete!")
+    print("Generation complete!")
 
 
 def main():
-	parser = argparse.ArgumentParser(description='Convert a RWGPS Map to a BC Rando style cuesheet')
-	
-	parser.add_argument("-i", "--island", help="In the style of Vancouver Island, show distance from last control",
-						action="store_true")
+    parser = argparse.ArgumentParser(
+        description="Convert a RWGPS Map to a BC Rando style cuesheet"
+    )
 
-	parser.add_argument("-d", "--hidedir", help="Hide the direction column",
-						action="store_true")
+    parser.add_argument(
+        "-i",
+        "--island",
+        help="In the style of Vancouver Island, show distance from last control",
+        action="store_true",
+    )
 
-	parser.add_argument("-v", "--verbose", help="Output all statuses",
-						action="store_true")
+    parser.add_argument(
+        "-d", "--hidedir", help="Hide the direction column", action="store_true"
+    )
 
-	parser.add_argument("-o", "--output", help="Override output filename",
-						type=output_exists)
-	parser.add_argument("-u", "--url", help="URL if pulling from the web directly, like https://ridewithgps.com/routes/1234",
-						type=valid_url)
-	parser.add_argument("-f", "--filename", help="CSV if converting locally",
-						type=csv_file)
+    parser.add_argument(
+        "-v", "--verbose", help="Output all statuses", action="store_true"
+    )
 
-	parser.add_argument("--debugging", action="store_true")
+    parser.add_argument(
+        "-o", "--output", help="Override output filename", type=output_exists
+    )
+    parser.add_argument(
+        "-u",
+        "--url",
+        help="URL if pulling from the web directly, like https://ridewithgps.com/routes/1234",
+        type=valid_url,
+    )
+    parser.add_argument(
+        "-f", "--filename", help="CSV if converting locally", type=csv_file
+    )
 
-	args = parser.parse_args()
+    parser.add_argument("--debugging", action="store_true")
 
-	# Okay, we know at least one is required
-	if args.url is None and args.filename is None:
-		sys.exit ("You have to supply either a filename or a URL!")
+    args = parser.parse_args()
 
-	# obligatory warning
-	if args.url is not None:
-		# let them know they screwed up
-		if args.filename is not None:
-			print ("Ignoring filename with URL specified")
+    # Okay, we know at least one is required
+    if args.url is None and args.filename is None:
+        sys.exit("You have to supply either a filename or a URL!")
 
-		print ("URL grabbing is experimental. Currently non-functional with updated routes due to API restrictions")
+    # obligatory warning
+    if args.url is not None:
+        # let them know they screwed up
+        if args.filename is not None:
+            print("Ignoring filename with URL specified")
 
-	if args.verbose:
-		print ("Running converter in verbose mode")
-	if args.debugging:
-		print ("DEBUG MODE")
+        print(
+            "URL grabbing is experimental. Currently non-functional with updated routes due to API restrictions"
+        )
 
-	args_msg = "Cuesheet will:"
+    if args.verbose:
+        print("Running converter in verbose mode")
+    if args.debugging:
+        print("DEBUG MODE")
 
-	if args.island:
-		args_msg += " include distance from last control"
+    args_msg = "Cuesheet will:"
 
-	if args.hidedir:
-		if not args_msg.endswith(":"):
-			args_msg += ','
-		args_msg += " omit direction column"
+    if args.island:
+        args_msg += " include distance from last control"
 
-	if not args_msg.endswith(":"):
-		print (args_msg)
+    if args.hidedir:
+        if not args_msg.endswith(":"):
+            args_msg += ","
+        args_msg += " omit direction column"
 
-	# set where we output to
-	if args.output is not None:
-		excel_filename = args.output
-	elif args.url:
-		excel_filename = '{0}_cues.xlsx'.format(args.url['slug'])
-	else:
-		excel_filename = args.filename[args.filename.rfind('/')+1:]
-		excel_filename = excel_filename.replace('.csv', '_cues.xlsx')
+    if not args_msg.endswith(":"):
+        print(args_msg)
 
-	print ("We will output to '{0}'".format(excel_filename))
+    # set where we output to
+    if args.output is not None:
+        excel_filename = args.output
+    elif args.url:
+        excel_filename = "{0}_cues.xlsx".format(args.url["id"])
+    else:
+        excel_filename = args.filename[args.filename.rfind("/") + 1 :]
+        excel_filename = excel_filename.replace(".csv", "_cues.xlsx")
 
-	try:
-		create_directories()
-	# TODO: make specific
-	except Exception as e:
-		print (e)
-		print ("Unable to output to the proper directories")
+    print("We will output to '{0}'".format(excel_filename))
 
-	# set the filename
-	csv_filename = args.filename
+    try:
+        create_directories()
+    # TODO: make specific
+    except Exception as e:
+        print(e)
+        print("Unable to output to the proper directories")
 
-	# start the actions
-	if args.url is not None:
-		try:
-			curl_route(args.url['url'], args.verbose)
-			csv_filename = TMP_CURL_FILE
-		except Exception as e:
-			print ("Unable to retrieve url!")
-			sys.exit (e)
+    # set the filename
+    csv_filename = args.filename
 
-	# do the generation
-	run_generation(csv_filename, excel_filename, args)
+    # start the actions
+    if args.url is not None:
+        try:
+            curl_route(args.url, args.verbose)
+            csv_filename = TMP_CURL_FILE
+        except Exception as e:
+            print("Unable to retrieve url!")
+            sys.exit(e)
 
-	# move the files
-	try:
-		os.rename(excel_filename, XLSX_DIR+"/"+excel_filename)
-	except OSError as oe:
-		print ('Unable to move {0} to {1}/{2}/{0}'.format(excel_filename,
-														os.getcwd(),
-														XLSX_DIR) )
-		if oe.errno == 2:
-			print('likely the output dir is missing')
-	
-	try:
-		if args.url is not None:
-			os.remove(TMP_CURL_FILE)
-		elif not csv_filename.startswith(CSV_DIR):
-			os.rename(csv_filename, CSV_DIR+"/"+csv_filename)
-	except OSError as oe:
-		print('Unable to move {0} to {1}/{2}/{0}'.format(csv_filename,
-														os.getcwd(),
-														CSV_DIR) )
+    # do the generation
+    run_generation(csv_filename, excel_filename, args)
 
-	print ("Your cues file is now located at {0}/outputs/{1}".format(os.getcwd(),
-																	excel_filename))
-	# success!
-	sys.exit(0)
+    # move the files
+    try:
+        os.rename(excel_filename, XLSX_DIR + "/" + excel_filename)
+    except OSError as oe:
+        print(
+            "Unable to move {0} to {1}/{2}/{0}".format(
+                excel_filename, os.getcwd(), XLSX_DIR
+            )
+        )
+        if oe.errno == 2:
+            print("likely the output dir is missing")
+
+    try:
+        if args.url is not None:
+            os.remove(TMP_CURL_FILE)
+        elif not csv_filename.startswith(CSV_DIR):
+            os.rename(csv_filename, CSV_DIR + "/" + csv_filename)
+    except OSError as oe:
+        print(
+            "Unable to move {0} to {1}/{2}/{0}".format(
+                csv_filename, os.getcwd(), CSV_DIR
+            )
+        )
+        raise oe
+
+    print(
+        "Your cues file is now located at {0}/outputs/{1}".format(
+            os.getcwd(), excel_filename
+        )
+    )
+    # success!
+    sys.exit(0)
+
 
 if __name__ == "__main__":
-	main()
+    main()

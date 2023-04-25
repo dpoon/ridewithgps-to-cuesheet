@@ -3,6 +3,10 @@ from decimal import Decimal
 """
 	This program is designed to convert a RideWithGPS
 	exported csv file, into a BC Randonneurs Routesheet
+
+	TODO: direction legend
+	cum sum for control
+	align All rows to top
 """
 
 CONTROL_CUE_INDICATORS = ['Food','Control','Start','End','Summit']
@@ -38,6 +42,7 @@ def read_csv_to_array(filename):
 	except IOError as ioe:
 		if ioe.errno == 2:
 			print ("Cannot find CSV file")
+			raise ioe
 	except Exception as e:
 		print ("Error in reading csv file")
 		raise e

@@ -1,1 +1,1 @@
-xlsxwriter
+poetry===1.4.0
