@@ -1,48 +1,27 @@
-[tool.poetry]
+[project]
+authors = [{ name = "Etienne H", email = "et@hossack.me" }]
+license = { file = "LICENSE" }
+requires-python = ">=3.9,<4.0"
+dependencies = ["XlsxWriter<4.0.0,>=3.0.1", "requests<3.0.0,>=2.28.2"]
 name = "ridewithgps-to-cuesheet"
-version = "0.2.0"
-description = ""
-authors = ["Etienne H <et@hossack.me>"]
-license = "GPLv2"
+version = "0.4.0"
+description = "Convert RideWithGPS maps to BC Randonneurs cuesheets"
 
-[tool.poetry.dependencies]
-python = "^3.9"
-XlsxWriter = "^3.0.1"
-requests = "^2.28.2"
-
-[tool.poetry.dev-dependencies]
-
-[tool.poetry.group.dev.dependencies]
-ruff = "^0.0.263"
+[dependency-groups]
+dev = ["poethepoet>=0.34.0", "ruff<1.0.0,>=0.0.263"]
 
 [build-system]
-requires = ["poetry-core>=1.0.0"]
-build-backend = "poetry.core.masonry.api"
+requires = ["uv_build>=0.7.8,<0.8.0"]
+build-backend = "uv_build"
+
+[tool.uv.build-backend]
+module-name = "route_converter"
+module-root = ""
 
 [tool.ruff]
-select = [
-    "C9",
-    # "D", -- aspirational
-    "E",
-    "F",
-    "I",
-    "W",
-]
-exclude = [
-    ".git",
-    "__pycache__",
-    ".mypy_stubs",
-    ".venv",
-]
-ignore = [
-    "D100",
-    "D101",
-    "D102",
-    "D103",
-    "D104",
-    "D106",
-    "D203",
-]
+select = ["C9", "E", "F", "I", "W"]
+exclude = [".git", "__pycache__", ".mypy_stubs", ".venv"]
+ignore = ["D100", "D101", "D102", "D103", "D104", "D106", "D203"]
 line-length = 120
 
 [tool.ruff.isort]
@@ -50,3 +29,6 @@ split-on-trailing-comma = false
 
 [tool.ruff.mccabe]
 max-complexity = 10
+
+[tool.poe.tasks]
+convert-route = "script.py --url $URL --verbose"
