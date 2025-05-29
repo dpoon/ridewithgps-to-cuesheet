@@ -1,7 +1,7 @@
 [project]
 authors = [{ name = "Etienne H", email = "et@hossack.me" }]
-license = { text = "GPLv2" }
-requires-python = "<4.0,>=3.9"
+license = { file = "LICENSE" }
+requires-python = ">=3.9,<4.0"
 dependencies = ["XlsxWriter<4.0.0,>=3.0.1", "requests<3.0.0,>=2.28.2"]
 name = "ridewithgps-to-cuesheet"
 version = "0.4.0"

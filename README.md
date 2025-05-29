@@ -5,7 +5,7 @@ This converter was primarily written to save me time in creating routes, and eve
 
 ## Prereqs
 
-https://docs.astral.sh/uv/
+You need uv to install dependencies. See [uv documentation](https://docs.astral.sh/uv/)
 
 ## Usage:
 
