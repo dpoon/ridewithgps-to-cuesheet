@@ -8,7 +8,7 @@ version = "0.4.0"
 description = "Convert RideWithGPS maps to BC Randonneurs cuesheets"
 
 [dependency-groups]
-dev = ["ruff<1.0.0,>=0.0.263"]
+dev = ["poethepoet>=0.34.0", "ruff<1.0.0,>=0.0.263"]
 
 [build-system]
 requires = ["uv_build>=0.7.8,<0.8.0"]
@@ -29,3 +29,6 @@ split-on-trailing-comma = false
 
 [tool.ruff.mccabe]
 max-complexity = 10
+
+[tool.poe.tasks]
+convert-route = "script.py --url $URL --verbose"
