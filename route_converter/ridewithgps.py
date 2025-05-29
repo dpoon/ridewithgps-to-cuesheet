@@ -68,7 +68,7 @@ def format_array(array, verbose=False):
     return array
 
 
-def _format_cue(row, idx, last_dist, verbose=False):
+def _format_cue(row, idx, last_dist, verbose=False):  # noqa: C901 # TODO complexity
     """
     Parse the csv values into dictionaries so that they're easier to manipulate
 
@@ -142,7 +142,7 @@ def _format_cue(row, idx, last_dist, verbose=False):
     }
 
 
-def generate_excel(filename, values_array, opts):
+def generate_excel(filename, values_array, opts):  # noqa: C901 # TODO complexity
     """
     This is pretty much the meat. We take the array of dicts and spit out the values
 
@@ -167,9 +167,7 @@ def generate_excel(filename, values_array, opts):
         all_border = {"border": 1}
 
         # for the titles
-        title_format = workbook.add_format(
-            merge({"rotation": 90}, defaults, all_border)
-        )
+        title_format = workbook.add_format(merge({"rotation": 90}, defaults, all_border))
 
         descr_format = workbook.add_format(merge(centered, defaults, all_border))
         control_format = workbook.add_format(
@@ -183,26 +181,14 @@ def generate_excel(filename, values_array, opts):
         # default font
         arial_12 = workbook.add_format(merge(a_12_opts, all_border))
         arial_12_no_border = workbook.add_format(
-            merge(
-                a_12_opts, all_border, {"left_color": "white", "right_color": "white"}
-            )
+            merge(a_12_opts, all_border, {"left_color": "white", "right_color": "white"})
         )
         # Add a number format for cells with distances
-        dist_format = workbook.add_format(
-            merge({"num_format": "0.00"}, float_top, a_12_opts, all_border)
-        )
-        dist_format2 = workbook.add_format(
-            merge({"num_format": "0.0"}, float_top, a_12_opts, all_border)
-        )
-        cue_format = workbook.add_format(
-            merge({"text_wrap": True}, float_top, a_12_opts, all_border)
-        )
-        red_title = workbook.add_format(
-            merge({"font_color": "red"}, a_12_opts, centered)
-        )
-        black_title = workbook.add_format(
-            merge({"font_color": "black"}, a_12_opts, centered)
-        )
+        dist_format = workbook.add_format(merge({"num_format": "0.00"}, float_top, a_12_opts, all_border))
+        dist_format2 = workbook.add_format(merge({"num_format": "0.0"}, float_top, a_12_opts, all_border))
+        cue_format = workbook.add_format(merge({"text_wrap": True}, float_top, a_12_opts, all_border))
+        red_title = workbook.add_format(merge({"font_color": "red"}, a_12_opts, centered))
+        black_title = workbook.add_format(merge({"font_color": "black"}, a_12_opts, centered))
 
         # Add an Excel date format.
 
@@ -225,23 +211,15 @@ def generate_excel(filename, values_array, opts):
 
         last_col_letter = letter(num_cols)
 
-        worksheet.merge_range(
-            "A1:{0}1".format(last_col_letter), "INSERT NAME OF RIDE", red_title
-        )
-        worksheet.merge_range(
-            "A2:{0}2".format(last_col_letter), "insert date of ride", red_title
-        )
+        worksheet.merge_range("A1:{0}1".format(last_col_letter), "INSERT NAME OF RIDE", red_title)
+        worksheet.merge_range("A2:{0}2".format(last_col_letter), "insert date of ride", red_title)
         worksheet.merge_range(
             "A3:{0}3".format(last_col_letter),
             "insert name of Ride Organizer",
             red_title,
         )
-        worksheet.merge_range(
-            "A4:{0}4".format(last_col_letter), "insert Start location", red_title
-        )
-        worksheet.merge_range(
-            "A5:{0}5".format(last_col_letter), "insert Finish location", red_title
-        )
+        worksheet.merge_range("A4:{0}4".format(last_col_letter), "insert Start location", red_title)
+        worksheet.merge_range("A5:{0}5".format(last_col_letter), "insert Finish location", red_title)
 
         # Write some data headers.
         worksheet.write("A6", "Dist.(cum.)", title_format)
@@ -259,9 +237,7 @@ def generate_excel(filename, values_array, opts):
             curr_col += 1
 
         # on long rides, we need wider columns
-        worksheet.set_column(
-            "A:A", 7.5 if values_array[len(values_array) - 1]["dist"] > 1000 else 6.5
-        )  # width
+        worksheet.set_column("A:A", 7.5 if values_array[len(values_array) - 1]["dist"] > 1000 else 6.5)  # width
         worksheet.set_column("B:" + letter(curr_col), 5.6)  # width
         worksheet.write(letter(curr_col) + "6", "Route Description", descr_format)
         worksheet.set_column("{0}:{0}".format(letter(curr_col)), 39)  # width
@@ -290,10 +266,7 @@ def generate_excel(filename, values_array, opts):
             if opts.verbose:
                 tmp = "We're on row {0} at {1}kms".format(row_num - 6, row["dist"])
                 if "onto" in row["descr"]:
-                    tmp = (
-                        "({0}) ".format(row["descr"][row["descr"].find("onto") + 5 :])
-                        + tmp
-                    )
+                    tmp = "({0}) ".format(row["descr"][row["descr"].find("onto") + 5 :]) + tmp
                 else:
                     tmp = row["descr"] + ": " + tmp
                 print(tmp)

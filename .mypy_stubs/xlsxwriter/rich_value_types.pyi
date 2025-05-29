@@ -1,0 +1,3 @@
+from . import xmlwriter as xmlwriter
+
+class RichValueTypes(xmlwriter.XMLwriter): ...
