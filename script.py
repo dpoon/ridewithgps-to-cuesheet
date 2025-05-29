@@ -96,7 +96,7 @@ def run_generation(input_csv, output_xlsx, cli_args):
     print("Generation complete!")
 
 
-def main():
+def main(): # noqa: C901 # TODO complexity
     parser = argparse.ArgumentParser(
         description="Convert a RWGPS Map to a BC Rando style cuesheet"
     )

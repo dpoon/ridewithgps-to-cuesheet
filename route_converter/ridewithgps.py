@@ -68,7 +68,7 @@ def format_array(array, verbose=False):
     return array
 
 
-def _format_cue(row, idx, last_dist, verbose=False):
+def _format_cue(row, idx, last_dist, verbose=False): # noqa: C901 # TODO complexity
     """
     Parse the csv values into dictionaries so that they're easier to manipulate
 
@@ -142,7 +142,7 @@ def _format_cue(row, idx, last_dist, verbose=False):
     }
 
 
-def generate_excel(filename, values_array, opts):
+def generate_excel(filename, values_array, opts): # noqa: C901 # TODO complexity
     """
     This is pretty much the meat. We take the array of dicts and spit out the values
 
