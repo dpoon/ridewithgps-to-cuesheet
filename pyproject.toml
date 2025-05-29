@@ -1,7 +1,7 @@
 [tool.poetry]
 name = "ridewithgps-to-cuesheet"
-version = "0.2.0"
-description = ""
+version = "0.3.0"
+description = "Convert RideWithGPS maps to BC Randonneurs cuesheets"
 authors = ["Etienne H <et@hossack.me>"]
 license = "GPLv2"
 
@@ -28,21 +28,8 @@ select = [
     "I",
     "W",
 ]
-exclude = [
-    ".git",
-    "__pycache__",
-    ".mypy_stubs",
-    ".venv",
-]
-ignore = [
-    "D100",
-    "D101",
-    "D102",
-    "D103",
-    "D104",
-    "D106",
-    "D203",
-]
+exclude = [".git", "__pycache__", ".mypy_stubs", ".venv"]
+ignore = ["D100", "D101", "D102", "D103", "D104", "D106", "D203"]
 line-length = 120
 
 [tool.ruff.isort]
