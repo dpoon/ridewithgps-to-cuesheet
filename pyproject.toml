@@ -6,17 +6,21 @@ dependencies = ["XlsxWriter<4.0.0,>=3.0.1", "requests<3.0.0,>=2.28.2"]
 name = "ridewithgps-to-cuesheet"
 version = "0.4.0"
 description = "Convert RideWithGPS maps to BC Randonneurs cuesheets"
+readme = "README.md"
+
+[project.scripts]
+ridewithgps-to-cuesheet = "ridewithgps_to_cuesheet.cli:main"
+rwgps-cuesheet = "ridewithgps_to_cuesheet.cli:main"
 
 [dependency-groups]
 dev = ["poethepoet>=0.34.0", "ruff<1.0.0,>=0.0.263"]
 
 [build-system]
-requires = ["uv_build>=0.7.8,<0.8.0"]
-build-backend = "uv_build"
+requires = ["hatchling"]
+build-backend = "hatchling.build"
 
-[tool.uv.build-backend]
-module-name = "route_converter"
-module-root = ""
+[tool.hatch.build.targets.wheel]
+packages = ["src/ridewithgps_to_cuesheet"]
 
 [tool.ruff]
 select = ["C9", "E", "F", "I", "W"]
@@ -31,4 +35,4 @@ split-on-trailing-comma = false
 max-complexity = 10
 
 [tool.poe.tasks]
-convert-route = "script.py --url $URL --verbose"
+convert-route = "ridewithgps-to-cuesheet --url $URL --verbose"

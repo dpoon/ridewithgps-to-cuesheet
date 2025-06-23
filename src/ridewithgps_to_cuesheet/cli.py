@@ -1,3 +1,5 @@
+"""CLI interface for ridewithgps-to-cuesheet converter."""
+
 import argparse
 import os
 import sys
@@ -5,8 +7,8 @@ from urllib.parse import urlparse
 
 import requests
 
-import route_converter.ridewithgps as Converter
-from route_converter.ridewithgps import argsobject
+from . import ridewithgps as Converter
+from .ridewithgps import argsobject
 
 TMP_CURL_FILE = "_curl_file.csv"
 CSV_DIR = "files"
@@ -97,6 +99,7 @@ def run_generation(input_csv, output_xlsx, cli_args):
 
 
 def main():
+    """Main CLI entry point."""
     parser = argparse.ArgumentParser(
         description="Convert a RWGPS Map to a BC Rando style cuesheet"
     )
