@@ -15,23 +15,27 @@ END_INDICATOR = "Summit"
 START_TEXT = "DÉPART"
 END_TEXT = "ARRIVÉE"
 
+# Excel formatting constants
+DISTANCE_THRESHOLD_FOR_WIDE_COLUMN = 1000
+PAGE_BREAK_ROW_INTERVAL = 42
+FIRST_DATA_ROW = 6
+CONTROL_ROW_HEIGHT = 20
+REGULAR_ROW_HEIGHT = 15
 
-class argsobject(object):
+
+class argsobject:
     def __init__(self, d):
         self.__dict__ = d
 
 
 def merge(dict1, *dicts):
-    """Merge two dicts. Used so we can preserve consistent styling"""
     dict3 = dict1.copy()
     for dict in dicts:
         dict3.update(dict)
-
     return dict3
 
 
 def read_csv_to_array(filename):
-    """Basically import our csv file into an array"""
     import csv
 
     values = []
@@ -42,7 +46,6 @@ def read_csv_to_array(filename):
             for cue in cuesheet:
                 values.append(cue)
 
-    # TODO: make specific
     except IOError as ioe:
         if ioe.errno == 2:
             print("Cannot find CSV file")
@@ -50,8 +53,6 @@ def read_csv_to_array(filename):
     except Exception as e:
         print("Error in reading csv file")
         raise e
-    finally:
-        pass  # should be uneeded using 'with'
     return values
 
 
@@ -68,17 +69,47 @@ def format_array(array, verbose=False):
     return array
 
 
-def _format_cue(row, idx, last_dist, verbose=False):
-    """
-    Parse the csv values into dictionaries so that they're easier to manipulate
+def _map_direction(direction: str) -> str:
+    cue_dir = direction.lower()
+    if cue_dir == "straight":
+        return "CO"
+    elif cue_dir in ("left", "sharp left"):
+        return "L"
+    elif cue_dir == "slight left":
+        return "BL"
+    elif cue_dir in ("right", "sharp right"):
+        return "R"
+    elif cue_dir == "slight right":
+        return "BR"
+    elif cue_dir in ("generic", "food", "control"):
+        return ""
+    elif cue_dir == "uturn":
+        return "TA"
+    return direction
 
-    Return:
-            Dict with 'dict': the dictionary for the row
-                              'end': a boolean telling us if the cnotrol has an end value
-                              'last': the distance of this control for use in interval calculationn
-    """
+
+def _map_cue_description(description: str) -> str:
     import re
 
+    if description == "Start of route":
+        return START_TEXT
+    elif description == "End of route":
+        return END_TEXT
+    elif description.startswith("Continue onto "):
+        return description[len("Continue onto ") :]
+
+    for direction in ["left", "right"]:
+        if description.startswith(f"Turn {direction} onto "):
+            return description[len(f"Turn {direction} onto ") :]
+        elif re.match(f"Turn {direction} to ([^(stay)])", description):
+            return description[len(f"Turn {direction} to ") :]
+
+    description = description.replace("becomes", "b/c")
+    description = description.replace("slightly ", "")
+    return description
+
+
+def _format_cue(row, idx, last_dist, verbose=False):
     has_end = False
     is_control = row[0] in CONTROL_CUE_INDICATORS
     this_dist = Decimal(row[2])
@@ -86,54 +117,14 @@ def _format_cue(row, idx, last_dist, verbose=False):
     if idx == 1 and this_dist <= 0.1:
         this_dist = Decimal("0")
 
-    # the summit cue is what tells us there's an end
-    # (and that we will format the row cue with FINISH)
     if row[0] == END_INDICATOR:
         has_end = True
         row[1] = END_TEXT + ": " + row[1]
 
-    # direction via Rando standards
-    def map_dir(x: str):
-        cue_dir = x.lower()
-        if cue_dir == "straight":
-            return "CO"
-        elif cue_dir == "left" or cue_dir == "sharp left":
-            return "L"
-        elif cue_dir == "slight left":
-            return "BL"
-        elif cue_dir == "right" or cue_dir == "sharp right":
-            return "R"
-        elif cue_dir == "slight right":
-            return "BL"
-        elif cue_dir == "generic" or cue_dir == "food" or cue_dir == "control":
-            return ""
-        elif cue_dir == "uturn":
-            return "TA"
-
-        return x
-
-    # more compact cues
-    def map_cue(x):
-        if x == "Start of route":
-            return START_TEXT
-        elif x == "End of route":
-            return END_TEXT
-        elif x.startswith("Continue onto "):
-            return x[len("Continue onto ") :]
-        else:
-            for direction in ["left", "right"]:
-                if x.startswith("Turn " + direction + " onto "):
-                    return x[len("Turn " + direction + " onto ") :]
-                elif re.match("Turn " + direction + " to ([^(stay)])", x):
-                    return x[len("Turn " + direction + " to ") :]
-            x.replace("becomes", "b/c")
-            x.replace("slightly ", "")
-            return x
-
     return {
         "dict": {
-            "turn": map_dir(row[0]),
-            "descr": map_cue(row[1]),
+            "turn": _map_direction(row[0]),
+            "descr": _map_cue_description(row[1]),
             "dist": last_dist,
             "control": is_control,
         },
@@ -142,256 +133,229 @@ def _format_cue(row, idx, last_dist, verbose=False):
     }
 
 
-def generate_excel(filename, values_array, opts):
-    """
-    This is pretty much the meat. We take the array of dicts and spit out the values
+def _create_excel_formats(workbook):
+    defaults = {"font_size": 8, "font_name": "Arial"}
+    a_12_opts = {"font_size": 12, "font_name": "Arial"}
+    centered = {"align": "center", "valign": "vcenter"}
+    float_top = {"valign": "top"}
+    all_border = {"border": 1}
 
-    Arguments:
-
-            filename: to write to
-            values_array: as read in above
-            opts.include_from_last: to show distance since the last control
-            opts.hide_direction: hide direction column
-            opts.verbose: periodic printiouts
-    """
-    import xlsxwriter
-
-    try:
-        workbook = xlsxwriter.Workbook(filename)
-        worksheet = workbook.add_worksheet()
-
-        defaults = {"font_size": 8, "font_name": "Arial"}
-        a_12_opts = {"font_size": 12, "font_name": "Arial"}
-        centered = {"align": "center", "valign": "vcenter"}
-        float_top = {"valign": "top"}
-        all_border = {"border": 1}
-
-        # for the titles
-        title_format = workbook.add_format(
-            merge({"rotation": 90}, defaults, all_border)
-        )
-
-        descr_format = workbook.add_format(merge(centered, defaults, all_border))
-        control_format = workbook.add_format(
+    return {
+        "title_format": workbook.add_format(merge({"rotation": 90}, defaults, all_border)),
+        "descr_format": workbook.add_format(merge(centered, defaults, all_border)),
+        "control_format": workbook.add_format(
             merge(
                 {"bold": True, "bg_color": "#C0C0C0", "text_wrap": True},
                 centered,
                 a_12_opts,
                 all_border,
             )
-        )
-        # default font
-        arial_12 = workbook.add_format(merge(a_12_opts, all_border))
-        arial_12_no_border = workbook.add_format(
-            merge(
-                a_12_opts, all_border, {"left_color": "white", "right_color": "white"}
-            )
-        )
-        # Add a number format for cells with distances
-        dist_format = workbook.add_format(
-            merge({"num_format": "0.00"}, float_top, a_12_opts, all_border)
-        )
-        dist_format2 = workbook.add_format(
-            merge({"num_format": "0.0"}, float_top, a_12_opts, all_border)
-        )
-        cue_format = workbook.add_format(
-            merge({"text_wrap": True}, float_top, a_12_opts, all_border)
-        )
-        red_title = workbook.add_format(
-            merge({"font_color": "red"}, a_12_opts, centered)
-        )
-        black_title = workbook.add_format(
-            merge({"font_color": "black"}, a_12_opts, centered)
-        )
+        ),
+        "arial_12": workbook.add_format(merge(a_12_opts, all_border)),
+        "arial_12_no_border": workbook.add_format(
+            merge(a_12_opts, all_border, {"left_color": "white", "right_color": "white"})
+        ),
+        "dist_format": workbook.add_format(merge({"num_format": "0.00"}, float_top, a_12_opts, all_border)),
+        "dist_format2": workbook.add_format(merge({"num_format": "0.0"}, float_top, a_12_opts, all_border)),
+        "cue_format": workbook.add_format(merge({"text_wrap": True}, float_top, a_12_opts, all_border)),
+        "red_title": workbook.add_format(merge({"font_color": "red"}, a_12_opts, centered)),
+        "black_title": workbook.add_format(merge({"font_color": "black"}, a_12_opts, centered)),
+    }
 
-        # Add an Excel date format.
 
-        # Adjust the column width.
-        #     Cell width is (8.43/16.83) * XXmm
-        #     worksheet.set_column(1, 1, 15)
+def _setup_worksheet_headers(worksheet, formats, opts, values_array):
+    def letter(num_after):
+        return chr(65 + num_after)
 
-        # helper function to allow us to get the colum letters
-        def letter(num_after):
-            return chr(65 + num_after)
+    curr_col = 0
+    num_cols = 4
+    if opts.include_from_last:
+        num_cols += 1
+    if opts.hide_direction:
+        num_cols -= 1
 
-        col_num = 0
-        curr_col = col_num  # init
-        num_cols = 4
-        if opts.include_from_last:
-            num_cols += 1
+    last_col_letter = letter(num_cols)
 
-        if opts.hide_direction:
-            num_cols -= 1
+    # Header rows
+    worksheet.merge_range("A1:{0}1".format(last_col_letter), "INSERT NAME OF RIDE", formats["red_title"])
+    worksheet.merge_range("A2:{0}2".format(last_col_letter), "insert date of ride", formats["red_title"])
+    worksheet.merge_range("A3:{0}3".format(last_col_letter), "insert name of Ride Organizer", formats["red_title"])
+    worksheet.merge_range("A4:{0}4".format(last_col_letter), "insert Start location", formats["red_title"])
+    worksheet.merge_range("A5:{0}5".format(last_col_letter), "insert Finish location", formats["red_title"])
 
-        last_col_letter = letter(num_cols)
+    # Column headers
+    worksheet.write("A6", "Dist.(cum.)", formats["title_format"])
+    curr_col += 1
 
-        worksheet.merge_range(
-            "A1:{0}1".format(last_col_letter), "INSERT NAME OF RIDE", red_title
-        )
-        worksheet.merge_range(
-            "A2:{0}2".format(last_col_letter), "insert date of ride", red_title
-        )
-        worksheet.merge_range(
-            "A3:{0}3".format(last_col_letter),
-            "insert name of Ride Organizer",
-            red_title,
-        )
-        worksheet.merge_range(
-            "A4:{0}4".format(last_col_letter), "insert Start location", red_title
-        )
-        worksheet.merge_range(
-            "A5:{0}5".format(last_col_letter), "insert Finish location", red_title
-        )
-
-        # Write some data headers.
-        worksheet.write("A6", "Dist.(cum.)", title_format)
+    if opts.include_from_last:
+        worksheet.write(letter(curr_col) + "6", "Dist. Since", formats["title_format"])
         curr_col += 1
 
-        if opts.include_from_last:
-            worksheet.write(letter(curr_col) + "6", "Dist. Since", title_format)
-            curr_col += 1
+    worksheet.write(letter(curr_col) + "6", "Turn", formats["title_format"])
+    curr_col += 1
 
-        worksheet.write(letter(curr_col) + "6", "Turn", title_format)
+    if not opts.hide_direction:
+        worksheet.write(letter(curr_col) + "6", "Direction", formats["title_format"])
+        curr_col += 1
+
+    # Column widths
+    width = 7.5 if values_array[len(values_array) - 1]["dist"] > DISTANCE_THRESHOLD_FOR_WIDE_COLUMN else 6.5
+    worksheet.set_column("A:A", width)
+    worksheet.set_column("B:" + letter(curr_col), 5.6)
+    worksheet.write(letter(curr_col) + "6", "Route Description", formats["descr_format"])
+    worksheet.set_column("{0}:{0}".format(letter(curr_col)), 39)
+    curr_col += 1
+
+    worksheet.write(letter(curr_col) + "6", "Dist.(int.)", formats["title_format"])
+    worksheet.set_column("{0}:{0}".format(letter(curr_col)), 5.6)
+
+    return curr_col, last_col_letter
+
+
+def _write_data_row(
+    worksheet, row, row_num, curr_col, last_col_letter, last_was_control, ctrl_sum, curr_dist, formats, opts
+):
+    def letter(num_after):
+        return chr(65 + num_after)
+
+    # Distance columns
+    if row_num == FIRST_DATA_ROW + 1:  # First data row after headers
+        worksheet.write(row_num, curr_col, 0, formats["dist_format"])
+    elif row_num > FIRST_DATA_ROW + 1:
+        worksheet.write(
+            row_num,
+            curr_col,
+            "=A{0}+{1}{0}".format(
+                row_num if not last_was_control else row_num - 1,
+                last_col_letter,
+            ),
+            formats["dist_format"],
+        )
+    curr_col += 1
+
+    if opts.include_from_last:
+        worksheet.write(row_num, curr_col, ctrl_sum, formats["dist_format2"])
+        curr_col += 1
+
+    # Handle control vs regular cue
+    if row["control"]:
+        worksheet.write_string(row_num, curr_col, "", formats["arial_12_no_border"])
         curr_col += 1
 
         if not opts.hide_direction:
-            worksheet.write(letter(curr_col) + "6", "Direction", title_format)
+            worksheet.write_string(row_num, curr_col, "", formats["arial_12"])
             curr_col += 1
 
-        # on long rides, we need wider columns
-        worksheet.set_column(
-            "A:A", 7.5 if values_array[len(values_array) - 1]["dist"] > 1000 else 6.5
-        )  # width
-        worksheet.set_column("B:" + letter(curr_col), 5.6)  # width
-        worksheet.write(letter(curr_col) + "6", "Route Description", descr_format)
-        worksheet.set_column("{0}:{0}".format(letter(curr_col)), 39)  # width
+        worksheet.write_string(row_num, curr_col, row["descr"], formats["control_format"])
+        curr_col += 1
+        worksheet.write_string(row_num, curr_col, "", formats["arial_12"])
+        height = CONTROL_ROW_HEIGHT
+    else:
+        worksheet.write_string(row_num, curr_col, row["turn"], formats["arial_12"])
         curr_col += 1
 
-        worksheet.write(letter(curr_col) + "6", "Dist.(int.)", title_format)
-        worksheet.set_column("{0}:{0}".format(letter(curr_col)), 5.6)  # width
+        if not opts.hide_direction:
+            worksheet.write_string(row_num, curr_col, "", formats["arial_12"])
+            curr_col += 1
 
-        # Start from the first cell below the headers.
-        row_num = 6
+        worksheet.write_string(row_num, curr_col, row["descr"], formats["cue_format"])
+        curr_col += 1
+        worksheet.write_number(row_num, curr_col, curr_dist, formats["dist_format"])
+        height = REGULAR_ROW_HEIGHT
+
+    worksheet.set_row(row_num, height)
+    return height
+
+
+def _add_footer_information(worksheet, row_num, last_col_letter, formats):
+    row_num += 1
+    worksheet.merge_range(
+        "A{0}:{1}{0}".format(row_num, last_col_letter),
+        "IN CASE OF ABANDONMENT OR EMERGENCY",
+        formats["black_title"],
+    )
+    row_num += 1
+    worksheet.merge_range(
+        "A{0}:{1}{0}".format(row_num, last_col_letter),
+        "PHONE: ** ORGANIZER'S NUMBER **",
+        formats["black_title"],
+    )
+    row_num += 2
+    worksheet.merge_range(
+        "A{0}:{1}{0}".format(row_num, last_col_letter),
+        "ST=Turn Around, BL=Bear Left, BR=Bear Right, CO=Continue On, L/R=Left Immediate Right",
+        formats["black_title"],
+    )
+    return row_num + 1
+
+
+def generate_excel(filename, values_array, opts):
+    import xlsxwriter
+
+    try:
+        workbook = xlsxwriter.Workbook(filename)
+        worksheet = workbook.add_worksheet()
+
+        formats = _create_excel_formats(workbook)
+        col_num, last_col_letter = _setup_worksheet_headers(worksheet, formats, opts, values_array)
+
+        # Data processing variables
+        row_num = FIRST_DATA_ROW
         ctrl_sum = 0
         last_dist = 0
         pbreak_list = []
-        last_was_control = False  # for calculations
+        last_was_control = False
 
-        # now we get to loop through each row
         for i in range(len(values_array)):
             row = values_array[i]
-
-            # interval distance
             curr_dist = row["dist"] - last_dist
-            # for the next loop
             last_dist = 0
             curr_col = col_num
 
             if opts.verbose:
                 tmp = "We're on row {0} at {1}kms".format(row_num - 6, row["dist"])
                 if "onto" in row["descr"]:
-                    tmp = (
-                        "({0}) ".format(row["descr"][row["descr"].find("onto") + 5 :])
-                        + tmp
-                    )
+                    tmp = "({0}) ".format(row["descr"][row["descr"].find("onto") + 5 :]) + tmp
                 else:
                     tmp = row["descr"] + ": " + tmp
                 print(tmp)
                 print("\testimated distance is {0}kms since last".format(curr_dist))
 
-            if i == 0:
-                pass
-            elif i == 1:
-                worksheet.write(row_num, curr_col, 0, dist_format)
-            else:
-                # On those ones after a control, we'll simply repeat the previous sum
-                worksheet.write(
+            if i > 0:
+                _write_data_row(
+                    worksheet,
+                    row,
                     row_num,
                     curr_col,
-                    "=A{0}+{1}{0}".format(  # FIXME, don't do minus one
-                        row_num if not last_was_control else row_num - 1,
-                        last_col_letter,
-                    ),
-                    dist_format,
+                    last_col_letter,
+                    last_was_control,
+                    ctrl_sum,
+                    curr_dist,
+                    formats,
+                    opts,
                 )
-            curr_col += 1
-
-            # write out the include from last distances in the second column
-            if opts.include_from_last:
-                worksheet.write(row_num, curr_col, ctrl_sum, dist_format2)
-                curr_col += 1
 
             if row["control"]:
-                worksheet.write_string(row_num, curr_col, "", arial_12_no_border)
-                curr_col += 1
-
-                if not opts.hide_direction:
-                    worksheet.write_string(row_num, curr_col, "", arial_12)
-                    curr_col += 1
-
-                worksheet.write_string(row_num, curr_col, row["descr"], control_format)
-                curr_col += 1
-                worksheet.write_string(row_num, curr_col, "", arial_12)
-                height = 20
-
-                # reset the control accumulator
                 ctrl_sum = 0
                 last_was_control = True
-
-                # make a note of the distance so we can accumulate on the next cue
-                # FIXME add in missing continue after control
                 last_dist -= curr_dist
-                # for easier printing configuration
                 pbreak_list.append(row_num + 1)
             else:
                 last_was_control = False
-                worksheet.write_string(row_num, curr_col, row["turn"], arial_12)
-                curr_col += 1
-
-                if not opts.hide_direction:
-                    worksheet.write_string(row_num, curr_col, "", arial_12)
-                    curr_col += 1
-
-                worksheet.write_string(row_num, curr_col, row["descr"], cue_format)
-                curr_col += 1
-                worksheet.write_number(row_num, curr_col, curr_dist, dist_format)
-
-                height = 15
                 ctrl_sum += curr_dist
-                if (row_num - pbreak_list[-1]) == 42:
+                if pbreak_list and (row_num - pbreak_list[-1]) == PAGE_BREAK_ROW_INTERVAL:
                     pbreak_list.append(row_num)
 
-            # set the row_num formatting
-            worksheet.set_row(row_num, height)
             last_dist += row["dist"]
             row_num += 1
 
-        row_num += 1
-        worksheet.merge_range(
-            "A{0}:{1}{0}".format(row_num, last_col_letter),
-            "IN CASE OF ABANDONMENT OR EMERGENCY",
-            black_title,
-        )
-        row_num += 1
-        worksheet.merge_range(
-            "A{0}:{1}{0}".format(row_num, last_col_letter),
-            "PHONE: ** ORGANIZER'S NUMBER **",
-            black_title,
-        )
-        row_num += 2
-        worksheet.merge_range(
-            "A{0}:{1}{0}".format(row_num, last_col_letter),
-            "ST=Turn Around, BL=Bear Left, BR=Bear Right, CO=Continue On, L/R=Left Immediate Right",
-            black_title,
-        )
+        final_row = _add_footer_information(worksheet, row_num, last_col_letter, formats)
 
-        row_num += 1
-
-        # for printing
-        worksheet.print_area("A1:{0}{1}".format(last_col_letter, row_num))
-        # chop off finish and start
-        pbreak_list = pbreak_list[1:-1]
-        worksheet.set_h_pagebreaks(pbreak_list)
+        # Printing setup
+        worksheet.print_area("A1:{0}{1}".format(last_col_letter, final_row))
+        if len(pbreak_list) > 2:
+            pbreak_list = pbreak_list[1:-1]
+            worksheet.set_h_pagebreaks(pbreak_list)
 
     finally:
         if workbook is not None:

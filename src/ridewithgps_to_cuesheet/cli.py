@@ -21,7 +21,6 @@ CSV_DIR = "files"
 XLSX_DIR = "outputs"
 RW_URL_PREFIX = "https://ridewithgps.com/routes/"
 
-# Rich console for beautiful output
 console = Console()
 app = typer.Typer(
     name="ridewithgps-to-cuesheet",
@@ -30,9 +29,56 @@ app = typer.Typer(
 )
 
 
-# Validation Functions
+@app.command()
+def main(
+    filename: Optional[str] = typer.Option(
+        None,
+        "--filename",
+        "-f",
+        help="CSV file to convert locally",
+        callback=lambda v: validate_csv_file(v) if v else None,
+    ),
+    url: Optional[str] = typer.Option(
+        None,
+        "--url",
+        "-u",
+        help="RideWithGPS URL (e.g., https://ridewithgps.com/routes/1234)",
+    ),
+    output: Optional[str] = typer.Option(None, "--output", "-o", help="Override output filename"),
+    island: bool = typer.Option(
+        False, "--island", "-i", help="Vancouver Island style: show distance from last control"
+    ),
+    hidedir: bool = typer.Option(False, "--hidedir", "-d", help="Hide the direction column"),
+    verbose: bool = typer.Option(False, "--verbose", "-v", help="Enable verbose output"),
+    debugging: bool = typer.Option(False, "--debugging", help="Enable debug mode"),
+) -> None:
+    """Convert RideWithGPS routes to BC Randonneurs style cuesheets.
+
+    You must provide either a CSV file (--filename) or a RideWithGPS URL (--url).
+    """
+    filename, url_info = validate_inputs(filename, url)
+
+    options = {"island": island, "hidedir": hidedir, "verbose": verbose, "debugging": debugging}
+
+    display_configuration(options)
+
+    excel_filename = generate_output_filename(url_info, filename, output)
+    console.print(f"[blue]Output file:[/blue] {excel_filename}")
+
+    try:
+        create_directories()
+    except Exception as e:
+        console.print(f"[red]Error creating directories:[/red] {e}")
+        raise typer.Exit(1)
+
+    csv_filename = prepare_csv_file(filename, url_info, verbose)
+    run_conversion(csv_filename, excel_filename, options)
+    organize_output_files(excel_filename, filename, bool(url_info))
+
+    console.print("[green]🎉 Process completed successfully![/green]")
+
+
 def validate_csv_file(value: str) -> str:
-    """Validate that the input file is a CSV file."""
     if not value.endswith(".csv"):
         raise typer.BadParameter(f"File must be a CSV file, got: {value}")
 
@@ -44,7 +90,6 @@ def validate_csv_file(value: str) -> str:
 
 
 def validate_ridewithgps_url(value: str) -> dict:
-    """Validate and parse a RideWithGPS URL."""
     if not value.startswith(RW_URL_PREFIX) or value[len(RW_URL_PREFIX) :] == "":
         raise typer.BadParameter(f"Not a valid RideWithGPS URL. Must start with {RW_URL_PREFIX}")
 
@@ -57,7 +102,6 @@ def validate_ridewithgps_url(value: str) -> dict:
     return {"url": value, "parsed": parsed, "id": route_id}
 
 
-# Utility Functions
 def create_directories() -> None:
     """Create necessary output directories."""
     for directory in [CSV_DIR, XLSX_DIR]:
@@ -87,7 +131,6 @@ def download_route(url_info: dict, verbose: bool = False) -> None:
 
 
 def run_conversion(input_csv: str, output_xlsx: str, options: dict) -> None:
-    """Execute the main conversion process."""
     console.print("[blue]Reading CSV file...[/blue]")
 
     try:
@@ -138,7 +181,6 @@ def organize_output_files(excel_filename: str, csv_filename: Optional[str] = Non
 def generate_output_filename(
     url_info: Optional[dict] = None, csv_filename: Optional[str] = None, custom_output: Optional[str] = None
 ) -> str:
-    """Generate appropriate output filename based on input."""
     if custom_output:
         return custom_output
     elif url_info:
@@ -151,7 +193,6 @@ def generate_output_filename(
 
 
 def validate_inputs(filename: Optional[str], url: Optional[str]) -> tuple[Optional[str], Optional[dict]]:
-    """Validate and process CLI inputs."""
     # Input validation
     if not filename and not url:
         console.print("[red]Error:[/red] You must provide either a filename or a URL!")
@@ -174,13 +215,11 @@ def validate_inputs(filename: Optional[str], url: Optional[str]) -> tuple[Option
 
 
 def display_configuration(options: dict) -> None:
-    """Display the configuration options to the user."""
     if options["verbose"]:
         console.print("[blue]Running in verbose mode[/blue]")
     if options["debugging"]:
         console.print("[blue]DEBUG MODE[/blue]")
 
-    # Show what the cuesheet will include
     features = []
     if options["island"]:
         features.append("include distance from last control")
@@ -192,7 +231,6 @@ def display_configuration(options: dict) -> None:
 
 
 def prepare_csv_file(filename: Optional[str], url_info: Optional[dict], verbose: bool) -> str:
-    """Prepare the CSV file for conversion."""
     csv_filename = filename
     if url_info:
         download_route(url_info, verbose)
@@ -206,70 +244,10 @@ def prepare_csv_file(filename: Optional[str], url_info: Optional[dict], verbose:
     return csv_filename
 
 
-# Main CLI Command
-@app.command()
-def main(
-    filename: Optional[str] = typer.Option(
-        None,
-        "--filename",
-        "-f",
-        help="CSV file to convert locally",
-        callback=lambda v: validate_csv_file(v) if v else None,
-    ),
-    url: Optional[str] = typer.Option(
-        None,
-        "--url",
-        "-u",
-        help="RideWithGPS URL (e.g., https://ridewithgps.com/routes/1234)",
-    ),
-    output: Optional[str] = typer.Option(None, "--output", "-o", help="Override output filename"),
-    island: bool = typer.Option(
-        False, "--island", "-i", help="Vancouver Island style: show distance from last control"
-    ),
-    hidedir: bool = typer.Option(False, "--hidedir", "-d", help="Hide the direction column"),
-    verbose: bool = typer.Option(False, "--verbose", "-v", help="Enable verbose output"),
-    debugging: bool = typer.Option(False, "--debugging", help="Enable debug mode"),
-) -> None:
-    """Convert RideWithGPS routes to BC Randonneurs style cuesheets.
-
-    You must provide either a CSV file (--filename) or a RideWithGPS URL (--url).
-    """
-    # Validate inputs and get processed values
-    filename, url_info = validate_inputs(filename, url)
-
-    # Setup options
-    options = {"island": island, "hidedir": hidedir, "verbose": verbose, "debugging": debugging}
-
-    # Display configuration
-    display_configuration(options)
-
-    # Generate output filename
-    excel_filename = generate_output_filename(url_info, filename, output)
-    console.print(f"[blue]Output file:[/blue] {excel_filename}")
-
-    # Create directories
-    try:
-        create_directories()
-    except Exception as e:
-        console.print(f"[red]Error creating directories:[/red] {e}")
-        raise typer.Exit(1)
-
-    # Prepare CSV file
-    csv_filename = prepare_csv_file(filename, url_info, verbose)
-
-    # Run the conversion
-    run_conversion(csv_filename, excel_filename, options)
-
-    # Organize output files
-    organize_output_files(excel_filename, filename, bool(url_info))
-
-    console.print("[green]🎉 Process completed successfully![/green]")
-
-
-def cli() -> None:
+def cli():
     """Entry point for the CLI application."""
     app()
 
 
 if __name__ == "__main__":
-    cli()
+    app()
