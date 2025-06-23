@@ -101,7 +101,6 @@ def validate_ridewithgps_url(value: str) -> dict:
     return {"url": value, "parsed": parsed, "id": route_id}
 
 
-
 def download_route(url_info: dict, verbose: bool = False) -> str:
     """Download route data from RideWithGPS URL."""
     download_url = url_info["url"].replace(url_info["id"], f"{url_info['id']}.csv")
@@ -133,17 +132,17 @@ def run_conversion(input_csv: str, output_xlsx: str, options: dict) -> None:
 
     try:
         values_array = read_csv_to_array(input_csv)
-        values_array = Converter.format_array(values_array, options.get("verbose", False))
+        turns = Converter.parse_to_turns(values_array, options.get("verbose", False))
 
         console.print("[blue]Generating Excel file...[/blue]")
         Converter.generate_excel(
-            output_xlsx,
-            values_array,
-            {
-                "include_from_last": options.get("island", False),
-                "hide_direction": options.get("hidedir", False),
-                "verbose": options.get("verbose", False),
-            },
+            filename=output_xlsx,
+            turns=turns,
+            opts=Converter.GenerationOptions(
+                include_distance_from_last=options.get("island", False),
+                hide_direction=options.get("hidedir", False),
+                verbose=options.get("verbose", False),
+            ),
         )
 
         console.print("[green]✓[/green] Conversion completed successfully!")
@@ -153,7 +152,9 @@ def run_conversion(input_csv: str, output_xlsx: str, options: dict) -> None:
         raise typer.Exit(1)
 
 
-def organize_output_files(excel_filename: str, inputs_path: Path, outputs_path: Path, csv_filename: Optional[str] = None) -> None:
+def organize_output_files(
+    excel_filename: str, inputs_path: Path, outputs_path: Path, csv_filename: Optional[str] = None
+) -> None:
     """Move generated files to appropriate directories."""
     try:
         # Move Excel file to outputs directory
