@@ -69,7 +69,8 @@ class Turn:
 logger = logging.getLogger(__name__)
 
 
-def generate_excel(filename: str, turns: List[Turn], opts: GenerationOptions):
+def generate_excel(filename: str, csv_values: List[List[str]], opts: GenerationOptions):
+    turns = _parse_to_turns(csv_values, opts)
     try:
         workbook = xlsxwriter.Workbook(filename)
         worksheet = workbook.add_worksheet()
@@ -343,7 +344,7 @@ def _add_footer_information(worksheet, row_num, last_col_letter, formats):
     return row_num + 1
 
 
-def parse_to_turns(array: List[List[str]], opts: GenerationOptions) -> List[Turn]:
+def _parse_to_turns(array: List[List[str]], opts: GenerationOptions) -> List[Turn]:
     end_cue_present = False
     last = Decimal("-1.0")
     turns: List[Turn] = []

@@ -44,9 +44,8 @@ def main(
     island: bool = typer.Option(
         False, "--island", "-i", help="Vancouver Island style: show distance from last control"
     ),
-    hidedir: bool = typer.Option(False, "--hidedir", "-d", help="Hide the direction column"),
+    show_direction_column: bool = typer.Option(False, "--show-direction-column", "-sdc", help="Hide the direction column"),
     verbose: bool = typer.Option(False, "--verbose", "-v", help="Enable verbose output"),
-    debugging: bool = typer.Option(False, "--debugging", help="Enable debug mode"),
 ) -> None:
     """Convert RideWithGPS routes to BC Randonneurs style cuesheets.
 
@@ -55,9 +54,16 @@ def main(
     filename, url_info = validate_inputs(filename, url)
     inputs_path, outputs_path = Path(csv_directory), Path(xlsx_directory)
 
-    options = {"island": island, "hidedir": hidedir, "verbose": verbose, "debugging": debugging}
+    if verbose:
+        console.print("[blue]Running in verbose mode[/blue]")
+    features = []
+    if island:
+        features.append("include distance from last control")
+    if show_direction_column:
+        features.append("show direction column")
 
-    print_options(options)
+    if features:
+        console.print(f"[blue]Cuesheet will:[/blue] {', '.join(features)}")
 
     excel_filename = generate_output_filename(url_info, filename, output)
     console.print(f"[blue]Output file:[/blue] {excel_filename}")
@@ -70,7 +76,11 @@ def main(
         raise typer.Exit(1)
 
     csv_filename = prepare_csv_file(filename, url_info, verbose)
-    run_conversion(csv_filename, excel_filename, options)
+    run_conversion(csv_filename, excel_filename, options=Converter.GenerationOptions(
+                include_distance_from_last=island,
+                hide_direction=not show_direction_column,
+                verbose=verbose,
+            ))
     organize_output_files(excel_filename, inputs_path, outputs_path, filename)
 
     console.print("[green]🎉 Process completed successfully![/green]")
@@ -127,22 +137,16 @@ def download_route(url_info: dict, verbose: bool = False) -> str:
         raise typer.Exit(1)
 
 
-def run_conversion(input_csv: str, output_xlsx: str, options: dict) -> None:
+def run_conversion(input_csv: str, output_xlsx: str, options: Converter.GenerationOptions) -> None:
     console.print("[blue]Reading CSV file...[/blue]")
 
     try:
         values_array = read_csv_to_array(input_csv)
-        turns = Converter.parse_to_turns(values_array, options.get("verbose", False))
-
         console.print("[blue]Generating Excel file...[/blue]")
         Converter.generate_excel(
             filename=output_xlsx,
-            turns=turns,
-            opts=Converter.GenerationOptions(
-                include_distance_from_last=options.get("island", False),
-                hide_direction=options.get("hidedir", False),
-                verbose=options.get("verbose", False),
-            ),
+            csv_values=values_array,
+            opts=options,
         )
 
         console.print("[green]✓[/green] Conversion completed successfully!")
@@ -209,21 +213,6 @@ def validate_inputs(filename: Optional[str], url: Optional[str]) -> tuple[Option
 
     return filename, url_info
 
-
-def print_options(options: dict) -> None:
-    if options["verbose"]:
-        console.print("[blue]Running in verbose mode[/blue]")
-    if options["debugging"]:
-        console.print("[blue]DEBUG MODE[/blue]")
-
-    features = []
-    if options["island"]:
-        features.append("include distance from last control")
-    if options["hidedir"]:
-        features.append("omit direction column")
-
-    if features:
-        console.print(f"[blue]Cuesheet will:[/blue] {', '.join(features)}")
 
 
 def prepare_csv_file(filename: Optional[str], url_info: Optional[dict], verbose: bool) -> str:
