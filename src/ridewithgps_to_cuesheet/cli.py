@@ -10,11 +10,13 @@ from pathlib import Path
 from typing import Optional
 from urllib.parse import ParseResult, urlparse
 
-import requests
 import typer
 from rich.console import Console
 
-from . import ridewithgps as Converter
+from . import conversion as Converter
+from .logger import logger
+from .ridewithgps import authenticate, download_csv_content
+from .secrets import NoCredentialsError, load_credentials
 from .utils import read_csv_to_array
 
 console = Console()
@@ -23,7 +25,7 @@ app = typer.Typer(
     help="Convert RideWithGPS maps to BC Randonneurs style cuesheets",
     no_args_is_help=True,
 )
-logger = logging.getLogger("ridewithgps-to-cuesheet")
+
 
 
 @app.command()
@@ -151,27 +153,32 @@ def validate_ridewithgps_url(value: str) -> RideWithGpsUrl:
 
 def download_route(url_info: RideWithGpsUrl, outputs_path: Path, verbose: bool = False) -> Path:
     """Download route data from RideWithGPS URL."""
-    download_url = url_info.url.replace(url_info.id, f"{url_info.id}.csv")
+
     output_file = outputs_path / f"downloaded_cues_for_{url_info.id}.csv"
 
     if verbose:
-        console.print(f"[cyan]Downloading from:[/cyan] {download_url}")
+        console.print(f"[cyan]Downloading route from {url_info.url}...[/cyan]")
         console.print(f"[cyan]Saving to:[/cyan] {output_file}")
 
     try:
-        response = requests.get(download_url, timeout=30)
-        response.raise_for_status()
+        credentials = load_credentials()
+        auth_token = authenticate(
+            email=credentials.username,
+            password=credentials.password,
+            session_name=f"ridewithgps-to-cuesheet-download-of-route-{url_info.id}",
+        )
+        csv_content = download_csv_content(url_info.id, auth_token)
 
-        with open(output_file.absolute(), "wb") as tmp_file:
-            tmp_file.write(response.content)
+        with open(output_file.absolute(), "w", encoding="utf-8") as tmp_file:
+            tmp_file.write(csv_content)
 
         if verbose:
             console.print("[green]✓[/green] Download completed successfully")
 
         return output_file
 
-    except requests.RequestException as e:
-        console.print(f"[red]Error downloading route:[/red] {e}")
+    except (FileNotFoundError, ValueError) as e:
+        console.print(f"[red]Authentication error:[/red] {e}")
         raise typer.Exit(1)
 
 
@@ -227,7 +234,9 @@ def generate_output_filename(
     elif csv_file_path:
         return f"{csv_file_path.stem}_cues.xlsx"
     logger.warning(
-        f"No output filename provided, will {'overwrite' if Path('output_cues.xlsx').exists() else 'default to'} 'output_cues.xlsx'"
+        "No output filename provided, "
+        f"will {'overwrite' if Path('output_cues.xlsx').exists() else 'default to'}"
+        " 'output_cues.xlsx'"
     )
     return "output_cues.xlsx"
 
