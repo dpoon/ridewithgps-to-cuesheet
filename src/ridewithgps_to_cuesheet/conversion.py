@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from decimal import Decimal
 from typing import List, Literal
 
@@ -33,12 +33,12 @@ class GenerationOptions:
     hide_direction: bool = False
     two_decimals_precision: bool = True
     verbose: bool = False
-    control_cue_indicators = ["Control", "Start", "End", "Summit"]
-    end_indicator = "Summit"
-    start_text = "DÉPART"
-    end_text = "ARRIVÉE"
+    control_cue_indicators: List[str] = field(default_factory=lambda: ["Control", "Start", "End", "Summit"])
+    end_indicator: str = "Summit"
+    start_text: str = "DÉPART"
+    end_text: str = "ARRIVÉE"
     page_break_row_interval: int = 40
-    event_details: EventDetails = EventDetails()
+    event_details: EventDetails = field(default_factory=EventDetails)
 
 
 @dataclass(frozen=True)

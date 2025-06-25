@@ -1,4 +1,4 @@
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 
 import pytest
 
@@ -153,13 +153,11 @@ def test_parse_with_custom_end_indicator():
         ["Finish", "Finish line", "10.0", "50.0", ""],
         ["End", "End of route", "15.0", "30.0", ""],
     ]
-    # Since we can't change end_indicator in constructor, this test checks default behavior
-    opts = GenerationOptions()
+    opts = GenerationOptions(end_indicator="Finish")
 
     cues = _parse_to_cues(csv_data, opts)
 
     assert len(cues) == 3  # All rows should be processed
-    # The "End" cue should NOT be treated as end_indicator since default is "Summit"
     assert cues[-1].description != "ARRIVÉE: End of route"  # End is NOT the end_indicator
 
 
@@ -172,11 +170,18 @@ def test_parse_empty_data():
     assert len(cues) == 0
 
 
-def test_parse_invalid_distance():
+@pytest.mark.parametrize(
+    "dist,expected",
+    [
+        ("invalid", InvalidOperation),
+        ("-1.B", InvalidOperation),
+    ],
+)
+def test_parse_invalid_distance(dist, expected):
     csv_data = [
-        ["Start", "Start of route", "invalid", "0", ""],
+        ["Start", "Start of route", dist, "0", ""],
     ]
     opts = GenerationOptions()
 
-    with pytest.raises(Exception):  # Could be ValueError or Decimal InvalidOperation
+    with pytest.raises(expected):
         _parse_to_cues(csv_data, opts)
