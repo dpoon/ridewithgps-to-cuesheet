@@ -16,7 +16,7 @@ from rich.console import Console
 from . import conversion as Converter
 from .logger import logger
 from .ridewithgps import authenticate, download_csv_content
-from .secrets import NoCredentialsError, load_credentials
+from .secrets import load_credentials
 from .utils import read_csv_to_array
 
 console = Console()
@@ -25,7 +25,6 @@ app = typer.Typer(
     help="Convert RideWithGPS maps to BC Randonneurs style cuesheets",
     no_args_is_help=True,
 )
-
 
 
 @app.command()
