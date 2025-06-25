@@ -2,26 +2,37 @@
 authors = [{ name = "Etienne H", email = "et@hossack.me" }]
 license = { file = "LICENSE" }
 requires-python = ">=3.9,<4.0"
-dependencies = ["requests>=2.32.3", "xlsxwriter>=3.2.3"]
+dependencies = [
+    "XlsxWriter<4.0.0,>=3.0.1",
+    "requests<3.0.0,>=2.28.2",
+    "typer>=0.16.0",
+    "types-requests>=2.32.4.20250611",
+    "python-dotenv>=1.0.0",
+]
 name = "ridewithgps-to-cuesheet"
 version = "0.4.0"
 description = "Convert RideWithGPS maps to BC Randonneurs cuesheets"
+readme = "README.md"
+
+[project.scripts]
+ridewithgps-to-cuesheet = "ridewithgps_to_cuesheet.cli:cli"
+rwgps-cuesheet = "ridewithgps_to_cuesheet.cli:cli"
 
 [dependency-groups]
 dev = [
-    "mypy>=1.16.0",
+    "mypy>=1.16.1",
     "poethepoet>=0.34.0",
-    "ruff>=0.11.12",
-    "types-requests>=2.32.0.20250515",
+    "ruff<1.0.0,>=0.0.263",
+    "pytest>=8.0.0",
+    "pytest-cov>=5.0.0",
 ]
 
 [build-system]
-requires = ["uv_build>=0.7.8,<0.8.0"]
-build-backend = "uv_build"
+requires = ["hatchling"]
+build-backend = "hatchling.build"
 
-[tool.uv.build-backend]
-module-name = "route_converter"
-module-root = ""
+[tool.hatch.build.targets.wheel]
+packages = ["src/ridewithgps_to_cuesheet"]
 
 [tool.ruff]
 exclude = [".git", "__pycache__", ".mypy_stubs", ".venv"]
@@ -38,14 +49,18 @@ max-complexity = 10
 
 [tool.mypy]
 mypy_path = ".mypy_stubs"
+exclude = [".mypy_stubs"]
 show_error_codes = true
 show_column_numbers = true
 
 [tool.poe.tasks]
-convert-route = "script.py --url $URL --verbose"
-validate = ["lint", "type-check", "format-check"]
+convert-route = "ridewithgps-to-cuesheet --url $URL --verbose"
+convert = "ridewithgps-to-cuesheet --verbose"
 lint = "ruff check ."
-type-check = "mypy ."
 format-check = "ruff format --check ."
 format = "ruff format ."
+types-check = "mypy src/ridewithgps_to_cuesheet"
+test = "pytest tests/ -v"
+test-coverage = "pytest tests/ --cov=src/ridewithgps_to_cuesheet --cov-report=term-missing"
+validate = ["lint", "types-check", "format-check", "test"]
 generate-mypy-stubs = "stubgen --output .mypy_stubs"

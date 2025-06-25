@@ -1,0 +1,10 @@
+{
+    "cSpell.words": [
+        "Randonneurs"
+    ],
+    "editor.formatOnSave": true,
+    "[python]": {
+        "editor.defaultFormatter": "charliermarsh.ruff",
+        "editor.formatOnSaveMode": "modifications"
+    }
+}

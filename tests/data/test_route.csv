@@ -1,0 +1,8 @@
+Type,Notes,Distance (km) From Start,Elevation (m),Description
+Start,Start of route,0,0,
+Right,Right on Test St,0.5,10.0,
+Left,Left on Main St,2.0,15.0,
+Food,Food stop at cafe,5.0,20.0,
+Control,Control checkpoint,10.0,25.0,
+Summit,Summit at viewpoint,15.0,100.0,
+End,End of route,20.0,30.0,
