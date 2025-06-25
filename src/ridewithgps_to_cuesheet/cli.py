@@ -4,9 +4,11 @@ This module provides a command-line interface for converting RideWithGPS route f
 to BC Randonneurs style cue sheets. It supports both local CSV files and direct URL downloads.
 """
 
+import logging
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
-from urllib.parse import urlparse
+from urllib.parse import ParseResult, urlparse
 
 import requests
 import typer
@@ -21,6 +23,7 @@ app = typer.Typer(
     help="Convert RideWithGPS maps to BC Randonneurs style cuesheets",
     no_args_is_help=True,
 )
+logger = logging.getLogger("ridewithgps-to-cuesheet")
 
 
 @app.command()
@@ -44,18 +47,37 @@ def main(
     island: bool = typer.Option(
         False, "--island", "-i", help="Vancouver Island style: show distance from last control"
     ),
-    show_direction_column: bool = typer.Option(False, "--show-direction-column", "-sdc", help="Hide the direction column"),
+    show_direction_column: bool = typer.Option(
+        False, "--show-direction-column", "-sdc", help="Hide the direction column"
+    ),
+    two_decimals_precision: bool = typer.Option(
+        False, "--two-decimals-precision", "-tdp", help="Use two decimal places for distances"
+    ),
     verbose: bool = typer.Option(False, "--verbose", "-v", help="Enable verbose output"),
 ) -> None:
     """Convert RideWithGPS routes to BC Randonneurs style cuesheets.
 
     You must provide either a CSV file (--filename) or a RideWithGPS URL (--url).
     """
-    filename, url_info = validate_inputs(filename, url)
+    file_path, url_info = validate_inputs(filename, url)
     inputs_path, outputs_path = Path(csv_directory), Path(xlsx_directory)
 
     if verbose:
-        console.print("[blue]Running in verbose mode[/blue]")
+        console.print("[cyan]Running in verbose mode[/cyan]")
+
+        class ConsoleHandler(logging.Handler):
+            def emit(self, record: logging.LogRecord) -> None:
+                # colours from https://rich.readthedocs.io/en/stable/appendix/colors.html?highlight=color
+                if record.levelno <= logging.DEBUG:
+                    console.print(f"[medium_purple4]{record.msg}[/medium_purple4]")
+                elif record.levelno <= logging.WARNING:
+                    console.print(f"[slate_blue3]{record.msg}[/slate_blue3]")
+
+        console_handler = ConsoleHandler()
+        console_handler.setLevel(logging.DEBUG)
+        logger.addHandler(console_handler)
+        logger.setLevel(logging.DEBUG)
+
     features = []
     if island:
         features.append("include distance from last control")
@@ -63,10 +85,10 @@ def main(
         features.append("show direction column")
 
     if features:
-        console.print(f"[blue]Cuesheet will:[/blue] {', '.join(features)}")
+        console.print(f"[cyan]Cuesheet will:[/cyan] {', '.join(features)}")
 
-    excel_filename = generate_output_filename(url_info, filename, output)
-    console.print(f"[blue]Output file:[/blue] {excel_filename}")
+    excel_filename = generate_output_filename(url_info, file_path, output)
+    console.print(f"[cyan]Output file:[/cyan] {excel_filename}")
 
     try:
         inputs_path.mkdir(parents=True, exist_ok=True)
@@ -75,13 +97,18 @@ def main(
         console.print(f"[red]Error creating directories:[/red] {e}")
         raise typer.Exit(1)
 
-    csv_filename = prepare_csv_file(filename, url_info, verbose)
-    run_conversion(csv_filename, excel_filename, options=Converter.GenerationOptions(
-                include_distance_from_last=island,
-                hide_direction=not show_direction_column,
-                verbose=verbose,
-            ))
-    organize_output_files(excel_filename, inputs_path, outputs_path, filename)
+    csv_filename = prepare_csv_file(file_path, url_info, outputs_path, verbose)
+    run_conversion(
+        input_csv=str(csv_filename),
+        output_xlsx=excel_filename,
+        options=Converter.GenerationOptions(
+            include_distance_from_last=island,
+            two_decimals_precision=two_decimals_precision,
+            hide_direction=not show_direction_column,
+            verbose=verbose,
+        ),
+    )
+    organize_output_files(excel_filename, inputs_path, outputs_path, file_path)
 
     console.print("[green]🎉 Process completed successfully![/green]")
 
@@ -97,7 +124,14 @@ def validate_csv_file(value: str) -> str:
     return value
 
 
-def validate_ridewithgps_url(value: str) -> dict:
+@dataclass(frozen=True)
+class RideWithGpsUrl:
+    url: str
+    parsed: ParseResult
+    id: str
+
+
+def validate_ridewithgps_url(value: str) -> RideWithGpsUrl:
     RIDE_WITH_GPS_URL_PREFIX = "https://ridewithgps.com/routes/"
     if not value.startswith(RIDE_WITH_GPS_URL_PREFIX) or value[len(RIDE_WITH_GPS_URL_PREFIX) :] == "":
         raise typer.BadParameter(f"Not a valid RideWithGPS URL. Must start with {RIDE_WITH_GPS_URL_PREFIX}")
@@ -108,23 +142,27 @@ def validate_ridewithgps_url(value: str) -> dict:
     if not route_id or not route_id.isdigit():
         raise typer.BadParameter("URL must contain a valid route ID")
 
-    return {"url": value, "parsed": parsed, "id": route_id}
+    return RideWithGpsUrl(
+        url=value,
+        parsed=parsed,
+        id=route_id,
+    )
 
 
-def download_route(url_info: dict, verbose: bool = False) -> str:
+def download_route(url_info: RideWithGpsUrl, outputs_path: Path, verbose: bool = False) -> Path:
     """Download route data from RideWithGPS URL."""
-    download_url = url_info["url"].replace(url_info["id"], f"{url_info['id']}.csv")
-    output_file = f"downloaded_cues_for_{url_info['id']}"
+    download_url = url_info.url.replace(url_info.id, f"{url_info.id}.csv")
+    output_file = outputs_path / f"downloaded_cues_for_{url_info.id}.csv"
 
     if verbose:
-        console.print(f"[blue]Downloading from:[/blue] {download_url}")
-        console.print(f"[blue]Saving to:[/blue] {output_file}")
+        console.print(f"[cyan]Downloading from:[/cyan] {download_url}")
+        console.print(f"[cyan]Saving to:[/cyan] {output_file}")
 
     try:
         response = requests.get(download_url, timeout=30)
         response.raise_for_status()
 
-        with open(output_file, "wb") as tmp_file:
+        with open(output_file.absolute(), "wb") as tmp_file:
             tmp_file.write(response.content)
 
         if verbose:
@@ -138,11 +176,11 @@ def download_route(url_info: dict, verbose: bool = False) -> str:
 
 
 def run_conversion(input_csv: str, output_xlsx: str, options: Converter.GenerationOptions) -> None:
-    console.print("[blue]Reading CSV file...[/blue]")
+    console.print("[cyan]Reading CSV file...[/cyan]")
 
     try:
         values_array = read_csv_to_array(input_csv)
-        console.print("[blue]Generating Excel file...[/blue]")
+        console.print("[cyan]Generating Excel file...[/cyan]")
         Converter.generate_excel(
             filename=output_xlsx,
             csv_values=values_array,
@@ -157,7 +195,7 @@ def run_conversion(input_csv: str, output_xlsx: str, options: Converter.Generati
 
 
 def organize_output_files(
-    excel_filename: str, inputs_path: Path, outputs_path: Path, csv_filename: Optional[str] = None
+    excel_filename: str, inputs_path: Path, outputs_path: Path, csv_file_path: Optional[Path] = None
 ) -> None:
     """Move generated files to appropriate directories."""
     try:
@@ -167,37 +205,38 @@ def organize_output_files(
             Path(excel_filename).rename(output_path)
             console.print(f"[green]✓[/green] Output saved to: {output_path}")
 
-        if csv_filename:
-            is_csv_in_input_dir = Path(csv_filename).name not in [p.name for p in inputs_path.iterdir()]
+        if csv_file_path:
+            is_csv_in_input_dir = inputs_path in csv_file_path.parents
             if not is_csv_in_input_dir:
-                csv_path = inputs_path / Path(csv_filename).name
-                if Path(csv_filename).exists():
-                    Path(csv_filename).rename(csv_path)
-                console.print(f"[green]✓[/green] Input CSV moved to: {csv_path}")
+                moved_csv_path = inputs_path / csv_file_path.name
+                if csv_file_path.exists():
+                    csv_file_path.rename(moved_csv_path)
+                    console.print(f"[green]✓[/green] Input CSV moved to: {moved_csv_path}")
 
     except OSError as e:
         console.print(f"[yellow]Warning:[/yellow] Could not organize files: {e}")
 
 
 def generate_output_filename(
-    url_info: Optional[dict] = None, csv_filename: Optional[str] = None, custom_output: Optional[str] = None
+    url_info: Optional[RideWithGpsUrl] = None, csv_file_path: Optional[Path] = None, custom_output: Optional[str] = None
 ) -> str:
     if custom_output:
         return custom_output
     elif url_info:
-        return f"{url_info['id']}_cues.xlsx"
-    elif csv_filename:
-        stem = Path(csv_filename).stem
-        return f"{stem}_cues.xlsx"
+        return f"{url_info.id}_cues.xlsx"
+    elif csv_file_path:
+        return f"{csv_file_path.stem}_cues.xlsx"
+    logger.warning(
+        f"No output filename provided, will {'overwrite' if Path('output_cues.xlsx').exists() else 'default to'} 'output_cues.xlsx'"
+    )
     return "output_cues.xlsx"
 
 
-def validate_inputs(filename: Optional[str], url: Optional[str]) -> tuple[Optional[str], Optional[dict]]:
+def validate_inputs(filename: Optional[str], url: Optional[str]) -> tuple[Optional[Path], Optional[RideWithGpsUrl]]:
     # Input validation
     if not filename and not url:
         console.print("[red]Error:[/red] You must provide either a filename or a URL!")
         raise typer.Exit(1)
-
     if filename and url:
         console.print("[yellow]Warning:[/yellow] Both filename and URL provided. Using URL and ignoring filename.")
         filename = None
@@ -211,14 +250,15 @@ def validate_inputs(filename: Optional[str], url: Optional[str]) -> tuple[Option
             "with updated routes due to API restrictions."
         )
 
-    return filename, url_info
+    return Path(filename) if filename else None, url_info
 
 
-
-def prepare_csv_file(filename: Optional[str], url_info: Optional[dict], verbose: bool) -> str:
-    csv_filename = filename
+def prepare_csv_file(
+    file_path: Optional[Path], url_info: Optional[RideWithGpsUrl], outputs_path: Path, verbose: bool
+) -> Path:
+    csv_filename = file_path
     if url_info:
-        csv_filename = download_route(url_info, verbose)
+        csv_filename = download_route(url_info, outputs_path, verbose)
 
     # Ensure we have a valid CSV filename at this point
     if not csv_filename:
