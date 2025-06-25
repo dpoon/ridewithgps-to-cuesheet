@@ -2,18 +2,13 @@
 authors = [{ name = "Etienne H", email = "et@hossack.me" }]
 license = { file = "LICENSE" }
 requires-python = ">=3.9,<4.0"
-dependencies = ["requests>=2.32.3", "xlsxwriter>=3.2.3"]
+dependencies = ["XlsxWriter<4.0.0,>=3.0.1", "requests<3.0.0,>=2.28.2"]
 name = "ridewithgps-to-cuesheet"
 version = "0.4.0"
 description = "Convert RideWithGPS maps to BC Randonneurs cuesheets"
 
 [dependency-groups]
-dev = [
-    "mypy>=1.16.0",
-    "poethepoet>=0.34.0",
-    "ruff>=0.11.12",
-    "types-requests>=2.32.0.20250515",
-]
+dev = ["poethepoet>=0.34.0", "ruff<1.0.0,>=0.0.263"]
 
 [build-system]
 requires = ["uv_build>=0.7.8,<0.8.0"]
@@ -24,28 +19,16 @@ module-name = "route_converter"
 module-root = ""
 
 [tool.ruff]
+select = ["C9", "E", "F", "I", "W"]
 exclude = [".git", "__pycache__", ".mypy_stubs", ".venv"]
+ignore = ["D100", "D101", "D102", "D103", "D104", "D106", "D203"]
 line-length = 120
 
-[tool.ruff.lint]
-select = ["C9", "E", "F", "I", "W"]
-
-[tool.ruff.lint.isort]
+[tool.ruff.isort]
 split-on-trailing-comma = false
 
-[tool.ruff.lint.mccabe]
+[tool.ruff.mccabe]
 max-complexity = 10
-
-[tool.mypy]
-mypy_path = ".mypy_stubs"
-show_error_codes = true
-show_column_numbers = true
 
 [tool.poe.tasks]
 convert-route = "script.py --url $URL --verbose"
-validate = ["lint", "type-check", "format-check"]
-lint = "ruff check ."
-type-check = "mypy ."
-format-check = "ruff format --check ."
-format = "ruff format ."
-generate-mypy-stubs = "stubgen --output .mypy_stubs"

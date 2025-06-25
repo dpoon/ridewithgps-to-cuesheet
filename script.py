@@ -96,8 +96,10 @@ def run_generation(input_csv, output_xlsx, cli_args):
     print("Generation complete!")
 
 
-def main():  # noqa: C901 # TODO complexity
-    parser = argparse.ArgumentParser(description="Convert a RWGPS Map to a BC Rando style cuesheet")
+def main():
+    parser = argparse.ArgumentParser(
+        description="Convert a RWGPS Map to a BC Rando style cuesheet"
+    )
 
     parser.add_argument(
         "-i",
@@ -106,18 +108,26 @@ def main():  # noqa: C901 # TODO complexity
         action="store_true",
     )
 
-    parser.add_argument("-d", "--hidedir", help="Hide the direction column", action="store_true")
+    parser.add_argument(
+        "-d", "--hidedir", help="Hide the direction column", action="store_true"
+    )
 
-    parser.add_argument("-v", "--verbose", help="Output all statuses", action="store_true")
+    parser.add_argument(
+        "-v", "--verbose", help="Output all statuses", action="store_true"
+    )
 
-    parser.add_argument("-o", "--output", help="Override output filename", type=output_exists)
+    parser.add_argument(
+        "-o", "--output", help="Override output filename", type=output_exists
+    )
     parser.add_argument(
         "-u",
         "--url",
         help="URL if pulling from the web directly, like https://ridewithgps.com/routes/1234",
         type=valid_url,
     )
-    parser.add_argument("-f", "--filename", help="CSV if converting locally", type=csv_file)
+    parser.add_argument(
+        "-f", "--filename", help="CSV if converting locally", type=csv_file
+    )
 
     parser.add_argument("--debugging", action="store_true")
 
@@ -133,7 +143,9 @@ def main():  # noqa: C901 # TODO complexity
         if args.filename is not None:
             print("Ignoring filename with URL specified")
 
-        print("URL grabbing is experimental. Currently non-functional with updated routes due to API restrictions")
+        print(
+            "URL grabbing is experimental. Currently non-functional with updated routes due to API restrictions"
+        )
 
     if args.verbose:
         print("Running converter in verbose mode")
@@ -190,7 +202,11 @@ def main():  # noqa: C901 # TODO complexity
     try:
         os.rename(excel_filename, XLSX_DIR + "/" + excel_filename)
     except OSError as oe:
-        print("Unable to move {0} to {1}/{2}/{0}".format(excel_filename, os.getcwd(), XLSX_DIR))
+        print(
+            "Unable to move {0} to {1}/{2}/{0}".format(
+                excel_filename, os.getcwd(), XLSX_DIR
+            )
+        )
         if oe.errno == 2:
             print("likely the output dir is missing")
 
@@ -200,10 +216,18 @@ def main():  # noqa: C901 # TODO complexity
         elif not csv_filename.startswith(CSV_DIR):
             os.rename(csv_filename, CSV_DIR + "/" + csv_filename)
     except OSError as oe:
-        print("Unable to move {0} to {1}/{2}/{0}".format(csv_filename, os.getcwd(), CSV_DIR))
+        print(
+            "Unable to move {0} to {1}/{2}/{0}".format(
+                csv_filename, os.getcwd(), CSV_DIR
+            )
+        )
         raise oe
 
-    print("Your cues file is now located at {0}/outputs/{1}".format(os.getcwd(), excel_filename))
+    print(
+        "Your cues file is now located at {0}/outputs/{1}".format(
+            os.getcwd(), excel_filename
+        )
+    )
     # success!
     sys.exit(0)
 
