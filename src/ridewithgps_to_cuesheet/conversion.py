@@ -321,7 +321,7 @@ def _add_footer_information(worksheet: Worksheet, row_num: int, last_col_letter:
     row_num += 2
     worksheet.merge_range(
         f"A{row_num}:{last_col_letter}{row_num}",
-        data="ST=Turn Around, BL=Bear Left, BR=Bear Right, CO=Continue On, L/R=Left Immediate Right",
+        data="TA=Turn Around, BL=Bear Left, BR=Bear Right, CO=Continue On",
         cell_format=formats.black_title,
     )
     worksheet.set_row(row=row_num - 1, height=CONTROL_ROW_HEIGHT * 2)
