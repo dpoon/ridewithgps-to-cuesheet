@@ -352,7 +352,7 @@ def _parse_to_cues(array: List[List[str]], opts: GenerationOptions) -> List[Cue]
 
 def _read_as_cue(row: List[str], idx: int, last_dist: Decimal, opts: GenerationOptions) -> Cue:
     has_end = False
-    is_control = row[0] in opts.control_cue_indicators or (row[1].startswith("Control:"))
+    is_control = bool(row[0] in opts.control_cue_indicators or re.match(r"^Control.*?:", row[1]))
     is_danger = row[0].lower() == "danger"
     this_dist = Decimal(row[2])
 
@@ -401,16 +401,18 @@ def _map_cue_description(opts: GenerationOptions, description: str) -> str:
         return opts.start_text
     elif description == "End of route":
         return opts.end_text
-    elif description.startswith("Continue onto "):
-        return description[len("Continue onto ") :]
-    elif description.startswith("Control:"):
-        return description[len("Control:") :]
-
-    for direction in ["left", "right"]:
-        if description.startswith(f"Turn {direction} onto "):
-            return description[len(f"Turn {direction} onto ") :]
-        elif re.match(f"Turn {direction} to ([^(stay)])", description):
-            return description[len(f"Turn {direction} to ") :]
+    elif match := re.match("Control.*?: *(?P<control_name>.*)", description):
+        return match.group('control_name')
+    elif match := re.match(r"^At roundabout, take exit (?P<exit>\d+) [io]nto (?P<road>.*)", description):
+        return f"{match.group('road')} (roundabout exit {match.group('exit')})"
+    elif match := re.match(r"^Continue (?:straight )?[io]nto (?P<road>.*)", description):
+        return match.group('road')
+    elif match := re.match(r"^(?:Keep|Turn) (?:slight )?(?:left|right) [io]nto (?P<road>.*)", description):
+        return match.group('road')
+    elif match := re.match(r"^(?:Make a )?U-turn on(?:to)? (?P<road>.*)", description):
+        return match.group('road')
+    elif match := re.match(f"Turn (?P<direction>left|right) to ([^(stay)])", description):
+        return description[len(f"Turn {match.group('direction')} to ") :]
 
     description = description.replace("becomes", "b/c")
     description = description.replace("slightly ", "")
