@@ -89,12 +89,8 @@ def generate_excel(filename: str, csv_values: List[List[str]], opts: GenerationO
             last_dist = Decimal("0.0")
 
             if opts.verbose:
-                tmp = f"We're on turn {cue_num} at {turn.dist}kms"
-                if "onto" in turn.description:
-                    tmp = f"({turn.description[turn.description.find('onto') + 5 :]}) {tmp}"
-                else:
-                    tmp = f"{turn.description}: {tmp}"
-                logger.debug(f"{tmp}\n\testimated distance is {curr_dist}kms since last")
+                logger.debug(f"{turn.description}: We're on turn {cue_num} at {turn.dist}km\n"
+                             f"\testimated distance is {curr_dist}km since last")
 
             _write_data_row(
                 worksheet,
