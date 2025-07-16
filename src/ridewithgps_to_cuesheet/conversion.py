@@ -84,8 +84,7 @@ def generate_excel(filename: str, csv_values: List[List[str]], opts: GenerationO
         page_break_list = []
         last_row_was_control = False
 
-        for cue_num in range(len(cues)):
-            turn = cues[cue_num]
+        for cue_num, turn in enumerate(cues):
             curr_dist = turn.dist - last_dist
             last_dist = Decimal("0.0")
 
